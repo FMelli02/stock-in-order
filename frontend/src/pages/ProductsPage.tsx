@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { isAxiosError } from 'axios'
+import toast from 'react-hot-toast'
 import api from '../services/api'
 import Modal from '../components/Modal'
 import ProductForm from '../components/ProductForm'
@@ -57,14 +58,43 @@ export default function ProductsPage() {
   }
 
   const handleDelete = async (product: Product) => {
-    const ok = window.confirm('¿Estás seguro?')
-    if (!ok) return
+    const confirmed = await new Promise<boolean>((resolve) => {
+      toast((t) => (
+        <div>
+          <p className="font-medium mb-2">¿Estás seguro de eliminar este producto?</p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                toast.dismiss(t.id)
+                resolve(true)
+              }}
+              className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700"
+            >
+              Eliminar
+            </button>
+            <button
+              onClick={() => {
+                toast.dismiss(t.id)
+                resolve(false)
+              }}
+              className="px-3 py-1 bg-gray-300 text-gray-800 rounded hover:bg-gray-400"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      ), { duration: Infinity })
+    })
+    
+    if (!confirmed) return
+    
     try {
       await api.delete(`/products/${product.id}`)
+      toast.success('Producto eliminado correctamente')
       await fetchProducts()
     } catch (err) {
       console.error(err)
-      alert('No se pudo eliminar el producto')
+      toast.error('No se pudo eliminar el producto')
     }
   }
 

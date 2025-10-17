@@ -1,0 +1,31 @@
+# Archivos de entorno (contienen secretos)
+.env
+.env.local
+.env.prod
+.env.*.local
+
+# Datos de la base de datos local de Docker
+postgres-data/
+
+# Binarios de Go
+backend/api
+backend/api.exe
+backend/*.exe
+backend/main
+backend/coverage.out
+backend/coverage.html
+
+# Dependencias de Node
+frontend/node_modules/
+frontend/dist/
+frontend/coverage/
+
+# Logs
+*.log
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store

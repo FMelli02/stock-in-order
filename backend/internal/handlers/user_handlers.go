@@ -28,8 +28,13 @@ type LoginUserInput struct {
 	Password string `json:"password" validate:"required"`
 }
 
-// RegisterUser returns an http.HandlerFunc that registers a new user.
-func RegisterUser(db *pgxpool.Pool) http.HandlerFunc {
+// userInserter defines the behavior needed to insert a user. This facilitates testing.
+type userInserter interface {
+	Insert(user *models.User) error
+}
+
+// registerUserHandler returns a handler using the provided store for persistence.
+func registerUserHandler(store userInserter) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var in RegisterUserInput
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
@@ -56,8 +61,7 @@ func RegisterUser(db *pgxpool.Pool) http.HandlerFunc {
 			PasswordHash: hash,
 		}
 
-		um := &models.UserModel{DB: db}
-		if err := um.Insert(user); err != nil {
+		if err := store.Insert(user); err != nil {
 			if err == models.ErrDuplicateEmail {
 				w.WriteHeader(http.StatusConflict)
 				_ = json.NewEncoder(w).Encode(map[string]any{"error": "email already exists"})
@@ -77,6 +81,12 @@ func RegisterUser(db *pgxpool.Pool) http.HandlerFunc {
 			"created_at": user.CreatedAt,
 		})
 	}
+}
+
+// RegisterUser returns an http.HandlerFunc that registers a new user.
+func RegisterUser(db *pgxpool.Pool) http.HandlerFunc {
+	store := &models.UserModel{DB: db}
+	return registerUserHandler(store)
 }
 
 // LoginUser authenticates a user and returns a JWT token.

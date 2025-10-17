@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import toast from 'react-hot-toast'
 import api from '../services/api'
 import type { OrderItemInput } from '../types/salesOrder'
 import type { Product } from '../types/product'
@@ -12,6 +13,7 @@ export default function CreateSalesOrderPage() {
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('')
   const [selectedProductId, setSelectedProductId] = useState<string>('')
   const [selectedQty, setSelectedQty] = useState<number>(1)
+  const [qtyError, setQtyError] = useState<string>('')
   const [orderItems, setOrderItems] = useState<OrderItemInput[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -49,6 +51,41 @@ export default function CreateSalesOrderPage() {
     return m
   }, [products])
 
+  // Calcular el total de la orden
+  const orderTotal = useMemo(() => {
+    return orderItems.reduce((sum, item) => {
+      const product = productsById.get(item.productId)
+      if (product) {
+        return sum + (item.quantity * product.quantity)
+      }
+      return sum
+    }, 0)
+  }, [orderItems, productsById])
+
+  // Obtener el producto seleccionado actualmente
+  const selectedProduct = useMemo(() => {
+    const pid = Number(selectedProductId)
+    return pid ? productsById.get(pid) : null
+  }, [selectedProductId, productsById])
+
+  // Validar cantidad contra stock disponible
+  const handleQtyChange = (value: number) => {
+    setSelectedQty(value)
+    if (selectedProduct && value > selectedProduct.quantity) {
+      setQtyError(`La cantidad no puede superar el stock disponible (${selectedProduct.quantity})`)
+    } else if (value <= 0) {
+      setQtyError('La cantidad debe ser mayor a 0')
+    } else {
+      setQtyError('')
+    }
+  }
+
+  const canAddItem = useMemo(() => {
+    if (!selectedProductId || selectedQty <= 0) return false
+    if (selectedProduct && selectedQty > selectedProduct.quantity) return false
+    return true
+  }, [selectedProductId, selectedQty, selectedProduct])
+
   const addItem = () => {
     const pid = Number(selectedProductId)
     if (!pid || selectedQty <= 0) return
@@ -72,11 +109,11 @@ export default function CreateSalesOrderPage() {
   const handleSubmit = async () => {
     const customerIdNum = Number(selectedCustomerId)
     if (!customerIdNum) {
-      alert('Seleccioná un cliente')
+      toast.error('Seleccioná un cliente')
       return
     }
     if (orderItems.length === 0) {
-      alert('Agregá al menos un ítem a la orden')
+      toast.error('Agregá al menos un ítem a la orden')
       return
     }
     try {
@@ -87,10 +124,11 @@ export default function CreateSalesOrderPage() {
         items: orderItems.map((it) => ({ product_id: it.productId, quantity: it.quantity })),
       }
       await api.post('/sales-orders', dto)
+      toast.success('Orden de venta creada correctamente')
       navigate('/sales-orders')
     } catch (e) {
       console.error(e)
-      alert('No se pudo guardar la orden')
+      toast.error('No se pudo guardar la orden')
     } finally {
       setSubmitting(false)
     }
@@ -142,14 +180,16 @@ export default function CreateSalesOrderPage() {
                   min={1}
                   className="mt-1 block w-full rounded border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                   value={selectedQty}
-                  onChange={(e) => setSelectedQty(Number(e.target.value))}
+                  onChange={(e) => handleQtyChange(Number(e.target.value))}
                 />
+                {qtyError && <p className="text-xs text-red-600 mt-1">{qtyError}</p>}
               </div>
               <div>
                 <button
                   type="button"
                   onClick={addItem}
-                  className="w-full px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+                  disabled={!canAddItem}
+                  className="w-full px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Añadir a la Orden
                 </button>
@@ -193,6 +233,12 @@ export default function CreateSalesOrderPage() {
                     </tr>
                   )}
                 </tbody>
+                <tfoot className="bg-gray-50 font-semibold">
+                  <tr>
+                    <td className="px-4 py-2 text-right" colSpan={2}>Total:</td>
+                    <td className="px-4 py-2">${orderTotal.toFixed(2)}</td>
+                  </tr>
+                </tfoot>
               </table>
             </div>
           </div>

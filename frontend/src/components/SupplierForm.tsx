@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import toast from 'react-hot-toast'
 import api from '../services/api'
 import type { Supplier } from '../types/supplier'
 
@@ -37,12 +38,15 @@ export default function SupplierForm({ supplierToEdit, onSuccess }: Props) {
       const payload = { name, contact_person: contactPerson, email, phone }
       if (supplierToEdit) {
         await api.put(`/suppliers/${supplierToEdit.id}`, payload)
+        toast.success('Proveedor actualizado correctamente')
       } else {
         await api.post('/suppliers', payload)
+        toast.success('Proveedor creado correctamente')
       }
       onSuccess()
     } catch (err) {
       console.error(err)
+      toast.error('No se pudo guardar el proveedor')
       setError('No se pudo guardar el proveedor')
     } finally {
       setSubmitting(false)

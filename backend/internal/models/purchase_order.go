@@ -14,11 +14,12 @@ import (
 // PurchaseOrder represents the header of a purchase order.
 // Mirrors the sales order but linked to a supplier.
 type PurchaseOrder struct {
-	ID         int64         `json:"id"`
-	SupplierID sql.NullInt64 `json:"supplier_id"`
-	OrderDate  time.Time     `json:"order_date"`
-	Status     string        `json:"status"`
-	UserID     int64         `json:"user_id"`
+	ID           int64         `json:"id"`
+	SupplierID   sql.NullInt64 `json:"supplier_id"`
+	SupplierName string        `json:"supplier_name,omitempty"`
+	OrderDate    time.Time     `json:"order_date"`
+	Status       string        `json:"status"`
+	UserID       int64         `json:"user_id"`
 }
 
 // PurchaseOrderItem represents a product item belonging to a purchase order.
@@ -82,10 +83,13 @@ func (m *PurchaseOrderModel) Create(order *PurchaseOrder, items []PurchaseOrderI
 // GetAllForUser returns all purchase orders for the given user.
 func (m *PurchaseOrderModel) GetAllForUser(userID int64) ([]PurchaseOrder, error) {
 	const q = `
-		SELECT id, supplier_id, order_date, status, user_id
-		FROM purchase_orders
-		WHERE user_id = $1
-		ORDER BY id DESC`
+		SELECT 
+			po.id, po.supplier_id, po.order_date, po.status, po.user_id,
+			s.name AS supplier_name
+		FROM purchase_orders po
+		LEFT JOIN suppliers s ON po.supplier_id = s.id
+		WHERE po.user_id = $1
+		ORDER BY po.id DESC`
 
 	rows, err := m.DB.Query(context.Background(), q, userID)
 	if err != nil {
@@ -96,8 +100,12 @@ func (m *PurchaseOrderModel) GetAllForUser(userID int64) ([]PurchaseOrder, error
 	var out []PurchaseOrder
 	for rows.Next() {
 		var o PurchaseOrder
-		if err := rows.Scan(&o.ID, &o.SupplierID, &o.OrderDate, &o.Status, &o.UserID); err != nil {
+		var supplierName sql.NullString
+		if err := rows.Scan(&o.ID, &o.SupplierID, &o.OrderDate, &o.Status, &o.UserID, &supplierName); err != nil {
 			return nil, err
+		}
+		if supplierName.Valid {
+			o.SupplierName = supplierName.String
 		}
 		out = append(out, o)
 	}
@@ -110,18 +118,25 @@ func (m *PurchaseOrderModel) GetAllForUser(userID int64) ([]PurchaseOrder, error
 // GetByID returns a specific purchase order for the user along with its items.
 func (m *PurchaseOrderModel) GetByID(orderID int64, userID int64) (*PurchaseOrder, []PurchaseOrderItem, error) {
 	const qOrder = `
-		SELECT id, supplier_id, order_date, status, user_id
-		FROM purchase_orders
-		WHERE id = $1 AND user_id = $2`
+		SELECT 
+			po.id, po.supplier_id, po.order_date, po.status, po.user_id,
+			s.name AS supplier_name
+		FROM purchase_orders po
+		LEFT JOIN suppliers s ON po.supplier_id = s.id
+		WHERE po.id = $1 AND po.user_id = $2`
 
 	var o PurchaseOrder
+	var supplierName sql.NullString
 	err := m.DB.QueryRow(context.Background(), qOrder, orderID, userID).
-		Scan(&o.ID, &o.SupplierID, &o.OrderDate, &o.Status, &o.UserID)
+		Scan(&o.ID, &o.SupplierID, &o.OrderDate, &o.Status, &o.UserID, &supplierName)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil, ErrNotFound
 		}
 		return nil, nil, err
+	}
+	if supplierName.Valid {
+		o.SupplierName = supplierName.String
 	}
 
 	const qItems = `

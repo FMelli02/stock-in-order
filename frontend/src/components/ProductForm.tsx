@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import toast from 'react-hot-toast'
 import api from '../services/api'
 import type { Product } from '../types/product'
 
@@ -33,12 +34,15 @@ export default function ProductForm({ productToEdit, onSuccess }: Props) {
     try {
       if (productToEdit) {
         await api.put(`/products/${productToEdit.id}`, { name, sku, quantity })
+        toast.success('Producto actualizado correctamente')
       } else {
         await api.post('/products', { name, sku, quantity })
+        toast.success('Producto creado correctamente')
       }
       onSuccess()
     } catch (err) {
       console.error(err)
+      toast.error('No se pudo guardar el producto')
       setError('No se pudo guardar el producto')
     } finally {
       setSubmitting(false)

@@ -13,12 +13,13 @@ import (
 
 // SalesOrder represents the header of a sales order.
 type SalesOrder struct {
-	ID          int64           `json:"id"`
-	CustomerID  sql.NullInt64   `json:"customer_id"`
-	OrderDate   time.Time       `json:"order_date"`
-	Status      string          `json:"status"`
-	TotalAmount sql.NullFloat64 `json:"total_amount"`
-	UserID      int64           `json:"user_id"`
+	ID           int64           `json:"id"`
+	CustomerID   sql.NullInt64   `json:"customer_id"`
+	CustomerName string          `json:"customer_name,omitempty"`
+	OrderDate    time.Time       `json:"order_date"`
+	Status       string          `json:"status"`
+	TotalAmount  sql.NullFloat64 `json:"total_amount"`
+	UserID       int64           `json:"user_id"`
 }
 
 // OrderItem represents a product item belonging to a sales order.
@@ -114,10 +115,13 @@ func (m *SalesOrderModel) Create(order *SalesOrder, items []OrderItem) error {
 // GetAllForUser returns all sales orders for the given user.
 func (m *SalesOrderModel) GetAllForUser(userID int64) ([]SalesOrder, error) {
 	const q = `
-		SELECT id, customer_id, order_date, status, total_amount, user_id
-		FROM sales_orders
-		WHERE user_id = $1
-		ORDER BY id DESC`
+		SELECT 
+			so.id, so.customer_id, so.order_date, so.status, so.total_amount, so.user_id,
+			c.name AS customer_name
+		FROM sales_orders so
+		LEFT JOIN customers c ON so.customer_id = c.id
+		WHERE so.user_id = $1
+		ORDER BY so.id DESC`
 
 	rows, err := m.DB.Query(context.Background(), q, userID)
 	if err != nil {
@@ -128,8 +132,12 @@ func (m *SalesOrderModel) GetAllForUser(userID int64) ([]SalesOrder, error) {
 	var out []SalesOrder
 	for rows.Next() {
 		var o SalesOrder
-		if err := rows.Scan(&o.ID, &o.CustomerID, &o.OrderDate, &o.Status, &o.TotalAmount, &o.UserID); err != nil {
+		var customerName sql.NullString
+		if err := rows.Scan(&o.ID, &o.CustomerID, &o.OrderDate, &o.Status, &o.TotalAmount, &o.UserID, &customerName); err != nil {
 			return nil, err
+		}
+		if customerName.Valid {
+			o.CustomerName = customerName.String
 		}
 		out = append(out, o)
 	}
@@ -142,18 +150,25 @@ func (m *SalesOrderModel) GetAllForUser(userID int64) ([]SalesOrder, error) {
 // GetByID returns a specific order for the user along with its items.
 func (m *SalesOrderModel) GetByID(orderID int64, userID int64) (*SalesOrder, []OrderItem, error) {
 	const qOrder = `
-		SELECT id, customer_id, order_date, status, total_amount, user_id
-		FROM sales_orders
-		WHERE id = $1 AND user_id = $2`
+		SELECT 
+			so.id, so.customer_id, so.order_date, so.status, so.total_amount, so.user_id,
+			c.name AS customer_name
+		FROM sales_orders so
+		LEFT JOIN customers c ON so.customer_id = c.id
+		WHERE so.id = $1 AND so.user_id = $2`
 
 	var o SalesOrder
+	var customerName sql.NullString
 	err := m.DB.QueryRow(context.Background(), qOrder, orderID, userID).
-		Scan(&o.ID, &o.CustomerID, &o.OrderDate, &o.Status, &o.TotalAmount, &o.UserID)
+		Scan(&o.ID, &o.CustomerID, &o.OrderDate, &o.Status, &o.TotalAmount, &o.UserID, &customerName)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil, ErrNotFound
 		}
 		return nil, nil, err
+	}
+	if customerName.Valid {
+		o.CustomerName = customerName.String
 	}
 
 	const qItems = `

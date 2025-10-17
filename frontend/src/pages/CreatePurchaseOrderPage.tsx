@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import toast from 'react-hot-toast'
 import api from '../services/api'
 import type { PurchaseOrderItemInput } from '../types/purchaseOrder'
 import type { Product } from '../types/product'
@@ -50,6 +51,13 @@ export default function CreatePurchaseOrderPage() {
     return m
   }, [products])
 
+  // Calcular el total de la orden
+  const orderTotal = useMemo(() => {
+    return orderItems.reduce((sum, item) => {
+      return sum + (item.quantity * item.unitCost)
+    }, 0)
+  }, [orderItems])
+
   const addItem = () => {
     const pid = Number(selectedProductId)
     if (!pid || selectedQty <= 0 || selectedCost < 0) return
@@ -74,11 +82,11 @@ export default function CreatePurchaseOrderPage() {
   const handleSubmit = async () => {
     const supplierIdNum = Number(selectedSupplierId)
     if (!supplierIdNum) {
-      alert('Seleccioná un proveedor')
+      toast.error('Seleccioná un proveedor')
       return
     }
     if (orderItems.length === 0) {
-      alert('Agregá al menos un ítem a la orden')
+      toast.error('Agregá al menos un ítem a la orden')
       return
     }
     try {
@@ -89,10 +97,11 @@ export default function CreatePurchaseOrderPage() {
         items: orderItems.map((it) => ({ product_id: it.productId, quantity: it.quantity, unit_cost: it.unitCost })),
       }
       await api.post('/purchase-orders', dto)
+      toast.success('Orden de compra creada correctamente')
       navigate('/purchase-orders')
     } catch (e) {
       console.error(e)
-      alert('No se pudo guardar la orden de compra')
+      toast.error('No se pudo guardar la orden de compra')
     } finally {
       setSubmitting(false)
     }
@@ -208,6 +217,12 @@ export default function CreatePurchaseOrderPage() {
                     </tr>
                   )}
                 </tbody>
+                <tfoot className="bg-gray-50 font-semibold">
+                  <tr>
+                    <td className="px-4 py-2 text-right" colSpan={3}>Total:</td>
+                    <td className="px-4 py-2">${orderTotal.toFixed(2)}</td>
+                  </tr>
+                </tfoot>
               </table>
             </div>
           </div>

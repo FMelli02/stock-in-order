@@ -1,6 +1,7 @@
 export interface PurchaseOrder {
   id: number
   supplier_id: number | null
+  supplier_name?: string
   order_date: string
   status: string
   user_id: number

@@ -1,6 +1,7 @@
 export interface SalesOrder {
   id: number
   customer_id: number | null
+  customer_name?: string
   order_date: string
   status: string
   total_amount: number | null

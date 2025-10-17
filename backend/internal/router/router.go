@@ -1,20 +1,20 @@
 package router
 
 import (
+	"log/slog"
 	"net/http"
 
 	"github.com/gorilla/mux"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/rs/cors"
 
 	"stock-in-order/backend/internal/handlers"
 	"stock-in-order/backend/internal/middleware"
 )
 
 // SetupRouter wires up HTTP routes.
-func SetupRouter(db *pgxpool.Pool, jwtSecret string) *mux.Router {
+func SetupRouter(db *pgxpool.Pool, jwtSecret string, logger *slog.Logger) http.Handler {
 	r := mux.NewRouter()
-	// Global middlewares
-	r.Use(middleware.CORSMiddleware)
 
 	// API v1
 	api := r.PathPrefix("/api/v1").Subrouter()
@@ -71,5 +71,18 @@ func SetupRouter(db *pgxpool.Pool, jwtSecret string) *mux.Router {
 	purchase.HandleFunc("/{id:[0-9]+}", handlers.GetPurchaseOrderByID(db)).Methods("GET")
 	purchase.HandleFunc("/{id:[0-9]+}/status", handlers.UpdatePurchaseOrderStatus(db)).Methods("PUT")
 
-	return r
+	// Configure CORS for Vite dev server and common API usage
+	c := cors.New(cors.Options{
+		AllowedOrigins:   []string{"http://localhost:5173"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Content-Type", "Authorization"},
+		AllowCredentials: true,
+	})
+
+	// Apply middlewares in order: CORS → Logging → Sentry → Routes
+	handler := c.Handler(r)
+	handler = middleware.LoggingMiddleware(logger)(handler)
+	handler = middleware.SentryMiddleware(handler, logger)
+
+	return handler
 }

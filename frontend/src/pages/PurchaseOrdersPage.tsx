@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import toast from 'react-hot-toast'
 import api from '../services/api'
 import type { PurchaseOrder } from '../types/purchaseOrder'
 
@@ -30,10 +31,11 @@ export default function PurchaseOrdersPage() {
     try {
       setUpdating(id)
       await api.put(`/purchase-orders/${id}/status`, { status: 'completed' })
+      toast.success('Estado actualizado a completado')
       await load()
     } catch (e) {
       console.error(e)
-      alert('No se pudo actualizar el estado')
+      toast.error('No se pudo actualizar el estado')
     } finally {
       setUpdating(null)
     }
@@ -55,7 +57,7 @@ export default function PurchaseOrdersPage() {
             <thead className="bg-gray-100">
               <tr>
                 <th className="px-4 py-2 text-left">ID de Orden</th>
-                <th className="px-4 py-2 text-left">ID de Proveedor</th>
+                <th className="px-4 py-2 text-left">Proveedor</th>
                 <th className="px-4 py-2 text-left">Fecha de Orden</th>
                 <th className="px-4 py-2 text-left">Estado</th>
                 <th className="px-4 py-2 text-left">Acciones</th>
@@ -67,7 +69,7 @@ export default function PurchaseOrdersPage() {
                   <td className="px-4 py-2">
                     <Link to={`/purchase-orders/${o.id}`} className="text-indigo-600 hover:underline">{o.id}</Link>
                   </td>
-                  <td className="px-4 py-2">{o.supplier_id ?? '-'}</td>
+                  <td className="px-4 py-2">{o.supplier_name ?? '-'}</td>
                   <td className="px-4 py-2">{new Date(o.order_date).toLocaleString()}</td>
                   <td className="px-4 py-2">{o.status}</td>
                   <td className="px-4 py-2">

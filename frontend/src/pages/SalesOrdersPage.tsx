@@ -44,7 +44,7 @@ export default function SalesOrdersPage() {
             <thead className="bg-gray-100">
               <tr>
                 <th className="px-4 py-2 text-left">ID de Orden</th>
-                <th className="px-4 py-2 text-left">ID de Cliente</th>
+                <th className="px-4 py-2 text-left">Cliente</th>
                 <th className="px-4 py-2 text-left">Fecha de Orden</th>
                 <th className="px-4 py-2 text-left">Estado</th>
                 <th className="px-4 py-2 text-left">Acciones</th>
@@ -56,7 +56,7 @@ export default function SalesOrdersPage() {
                   <td className="px-4 py-2">
                     <Link to={`/sales-orders/${o.id}`} className="text-indigo-600 hover:underline">{o.id}</Link>
                   </td>
-                  <td className="px-4 py-2">{o.customer_id ?? '-'}</td>
+                  <td className="px-4 py-2">{o.customer_name ?? '-'}</td>
                   <td className="px-4 py-2">{new Date(o.order_date).toLocaleString()}</td>
                   <td className="px-4 py-2">{o.status}</td>
                   <td className="px-4 py-2">

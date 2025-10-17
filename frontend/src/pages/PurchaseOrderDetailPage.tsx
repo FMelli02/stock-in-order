@@ -56,6 +56,13 @@ export default function PurchaseOrderDetailPage() {
     return m
   }, [products])
 
+  // Calcular el total de la orden
+  const orderTotal = useMemo(() => {
+    return items.reduce((sum, item) => {
+      return sum + (item.quantity * item.unit_cost)
+    }, 0)
+  }, [items])
+
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between">
@@ -74,7 +81,7 @@ export default function PurchaseOrderDetailPage() {
               <div><span className="text-gray-500">ID:</span> <span className="font-medium">#{order.id}</span></div>
               <div><span className="text-gray-500">Fecha:</span> <span className="font-medium">{new Date(order.order_date).toLocaleString()}</span></div>
               <div><span className="text-gray-500">Estado:</span> <span className="font-medium">{order.status}</span></div>
-              <div><span className="text-gray-500">Proveedor:</span> <span className="font-medium">{order.supplier_id ?? '-'}</span></div>
+              <div><span className="text-gray-500">Proveedor:</span> <span className="font-medium">{order.supplier_name ?? '-'}</span></div>
             </div>
           </div>
 
@@ -109,6 +116,12 @@ export default function PurchaseOrderDetailPage() {
                     </tr>
                   )}
                 </tbody>
+                <tfoot className="bg-gray-50 font-semibold">
+                  <tr>
+                    <td className="px-4 py-2 text-right" colSpan={2}>Total:</td>
+                    <td className="px-4 py-2">${orderTotal.toFixed(2)}</td>
+                  </tr>
+                </tfoot>
               </table>
             </div>
           </div>

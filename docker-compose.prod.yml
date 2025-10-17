@@ -1,0 +1,86 @@
+services:
+  postgres_db:
+    image: postgres:14-alpine
+    container_name: stock_in_order_postgres_prod
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER:-user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-pass}
+      POSTGRES_DB: ${DB_NAME:-stock_db}
+    ports:
+      - "${DB_PORT:-5433}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${DB_USER:-user}", "-d", "${DB_NAME:-stock_db}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - stock-network
+
+  migrate:
+    image: postgres:14-alpine
+    container_name: stock_in_order_migrate_prod
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${DB_PASSWORD:-pass}
+    volumes:
+      - ./backend/migrations:/migrations:ro
+    command: >-
+      sh -c 'for f in /migrations/*.up.sql; do echo "Applying $$f"; psql -h postgres_db -U ${DB_USER:-user} -d ${DB_NAME:-stock_db} -f "$$f"; done'
+    restart: "no"
+    networks:
+      - stock-network
+
+  api:
+    image: ghcr.io/${GITHUB_REPOSITORY:-fmelli02/stock-in-order}/backend:${VERSION:-latest}
+    container_name: stock_in_order_api_prod
+    restart: always
+    ports:
+      - "${API_PORT:-8080}:8080"
+    environment:
+      PORT: ":8080"
+      DB_DSN: "postgres://${DB_USER:-user}:${DB_PASSWORD:-pass}@postgres_db:5432/${DB_NAME:-stock_db}?sslmode=disable"
+      JWT_SECRET: ${JWT_SECRET}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      SENTRY_DSN: ${SENTRY_DSN_BACKEND:-}
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - stock-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  frontend:
+    image: ghcr.io/${GITHUB_REPOSITORY:-fmelli02/stock-in-order}/frontend:${VERSION:-latest}
+    container_name: stock_in_order_frontend_prod
+    restart: always
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - stock-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres-data:
+    driver: local
+
+networks:
+  stock-network:
+    driver: bridge

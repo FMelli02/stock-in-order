@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import toast from 'react-hot-toast'
 import api from '../services/api'
 import type { Customer } from '../types/customer'
 
@@ -37,12 +38,15 @@ export default function CustomerForm({ customerToEdit, onSuccess }: Props) {
       const payload = { name, email, phone, address }
       if (customerToEdit) {
         await api.put(`/customers/${customerToEdit.id}`, payload)
+        toast.success('Cliente actualizado correctamente')
       } else {
         await api.post('/customers', payload)
+        toast.success('Cliente creado correctamente')
       }
       onSuccess()
     } catch (err) {
       console.error(err)
+      toast.error('No se pudo guardar el cliente')
       setError('No se pudo guardar el cliente')
     } finally {
       setSubmitting(false)

@@ -1,0 +1,62 @@
+services:
+  postgres_db:
+    image: postgres:14-alpine
+    container_name: stock_in_order_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: pass
+      POSTGRES_DB: stock_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "user", "-d", "stock_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  api:
+    container_name: stock_in_order_api
+    build:
+      context: ./backend
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: ":8080"
+      DB_DSN: "postgres://user:pass@postgres_db:5432/stock_db?sslmode=disable"
+      JWT_SECRET: "dev-jwt-secret-change-me"
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  migrate:
+    image: postgres:14-alpine
+    container_name: stock_in_order_migrate
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: pass
+    volumes:
+      - ./backend/migrations:/migrations:ro
+    command: >-
+      sh -c 'for f in /migrations/*.sql; do echo "Applying $$f"; psql -h postgres_db -U user -d stock_db -f "$$f"; done'
+    restart: "no"
+
+  frontend:
+    container_name: stock_in_order_frontend
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: "http://localhost:8080/api/v1"
+    ports:
+      - "5173:80"
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+      api:
+        condition: service_started

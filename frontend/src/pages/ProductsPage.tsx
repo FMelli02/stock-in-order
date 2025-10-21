@@ -99,24 +99,26 @@ export default function ProductsPage() {
     }
   }
 
-  const handleExportCSV = async () => {
+  const handleExportExcel = async () => {
     try {
-      const response = await api.get('/reports/products/csv', {
+      const response = await api.get('/reports/products/xlsx', {
         responseType: 'blob',
       })
 
-      // Crear un blob y un link de descarga
-      const blob = new Blob([response.data], { type: 'text/csv' })
+      // Crear un blob y un link de descarga para archivo Excel
+      const blob = new Blob([response.data], { 
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+      })
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.setAttribute('download', 'productos.csv')
+      link.setAttribute('download', 'productos.xlsx')
       document.body.appendChild(link)
       link.click()
       link.remove()
       window.URL.revokeObjectURL(url)
 
-      toast.success('Productos exportados correctamente')
+      toast.success('Productos exportados a Excel correctamente')
     } catch (err) {
       console.error(err)
       toast.error('No se pudo exportar los productos')
@@ -129,13 +131,13 @@ export default function ProductsPage() {
         <h1 className="text-2xl font-bold">Productos</h1>
         <div className="flex gap-2">
           <button
-            onClick={handleExportCSV}
+            onClick={handleExportExcel}
             className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-2"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
             </svg>
-            Exportar CSV
+            Exportar Excel
           </button>
           <button
             onClick={openCreateModal}

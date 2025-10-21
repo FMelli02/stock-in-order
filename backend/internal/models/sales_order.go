@@ -11,6 +11,13 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// SalesOrderFilters contiene los filtros opcionales para exportar órdenes de venta
+type SalesOrderFilters struct {
+	DateFrom string
+	DateTo   string
+	Status   string
+}
+
 // SalesOrder represents the header of a sales order.
 type SalesOrder struct {
 	ID           int64           `json:"id"`
@@ -130,6 +137,64 @@ func (m *SalesOrderModel) GetAllForUser(userID int64) ([]SalesOrder, error) {
 	defer rows.Close()
 
 	out := []SalesOrder{} // Initialize as empty slice instead of nil
+	for rows.Next() {
+		var o SalesOrder
+		var customerName sql.NullString
+		if err := rows.Scan(&o.ID, &o.CustomerID, &o.OrderDate, &o.Status, &o.TotalAmount, &o.UserID, &customerName); err != nil {
+			return nil, err
+		}
+		if customerName.Valid {
+			o.CustomerName = customerName.String
+		}
+		out = append(out, o)
+	}
+	if rows.Err() != nil {
+		return nil, rows.Err()
+	}
+	return out, nil
+}
+
+// GetAllForUserWithFilters returns sales orders for the user with optional filters
+func (m *SalesOrderModel) GetAllForUserWithFilters(userID int64, filters SalesOrderFilters) ([]SalesOrder, error) {
+	query := `
+		SELECT 
+			so.id, so.customer_id, so.order_date, so.status, so.total_amount, so.user_id,
+			c.name AS customer_name
+		FROM sales_orders so
+		LEFT JOIN customers c ON so.customer_id = c.id
+		WHERE so.user_id = $1`
+
+	args := []interface{}{userID}
+	argIndex := 2
+
+	// Agregar filtros dinámicamente
+	if filters.DateFrom != "" {
+		query += fmt.Sprintf(" AND so.order_date >= $%d", argIndex)
+		args = append(args, filters.DateFrom)
+		argIndex++
+	}
+
+	if filters.DateTo != "" {
+		query += fmt.Sprintf(" AND so.order_date <= $%d", argIndex)
+		args = append(args, filters.DateTo)
+		argIndex++
+	}
+
+	if filters.Status != "" {
+		query += fmt.Sprintf(" AND so.status = $%d", argIndex)
+		args = append(args, filters.Status)
+		argIndex++
+	}
+
+	query += " ORDER BY so.id DESC"
+
+	rows, err := m.DB.Query(context.Background(), query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := []SalesOrder{}
 	for rows.Next() {
 		var o SalesOrder
 		var customerName sql.NullString

@@ -12,6 +12,13 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// PurchaseOrderFilters contiene los filtros opcionales para exportar órdenes de compra
+type PurchaseOrderFilters struct {
+	DateFrom string
+	DateTo   string
+	Status   string
+}
+
 // PurchaseOrder represents the header of a purchase order.
 // Mirrors the sales order but linked to a supplier.
 type PurchaseOrder struct {
@@ -101,6 +108,66 @@ func (m *PurchaseOrderModel) GetAllForUser(userID int64) ([]PurchaseOrder, error
 	defer rows.Close()
 
 	out := []PurchaseOrder{} // Initialize as empty slice instead of nil
+	for rows.Next() {
+		var o PurchaseOrder
+		var supplierName sql.NullString
+		var orderDate time.Time
+		if err := rows.Scan(&o.ID, &o.SupplierID, &orderDate, &o.Status, &o.UserID, &supplierName); err != nil {
+			return nil, err
+		}
+		o.OrderDate = &orderDate
+		if supplierName.Valid {
+			o.SupplierName = supplierName.String
+		}
+		out = append(out, o)
+	}
+	if rows.Err() != nil {
+		return nil, rows.Err()
+	}
+	return out, nil
+}
+
+// GetAllForUserWithFilters returns purchase orders for the user with optional filters
+func (m *PurchaseOrderModel) GetAllForUserWithFilters(userID int64, filters PurchaseOrderFilters) ([]PurchaseOrder, error) {
+	query := `
+		SELECT 
+			po.id, po.supplier_id, po.order_date, po.status, po.user_id,
+			s.name AS supplier_name
+		FROM purchase_orders po
+		LEFT JOIN suppliers s ON po.supplier_id = s.id
+		WHERE po.user_id = $1`
+
+	args := []interface{}{userID}
+	argIndex := 2
+
+	// Agregar filtros dinámicamente
+	if filters.DateFrom != "" {
+		query += fmt.Sprintf(" AND po.order_date >= $%d", argIndex)
+		args = append(args, filters.DateFrom)
+		argIndex++
+	}
+
+	if filters.DateTo != "" {
+		query += fmt.Sprintf(" AND po.order_date <= $%d", argIndex)
+		args = append(args, filters.DateTo)
+		argIndex++
+	}
+
+	if filters.Status != "" {
+		query += fmt.Sprintf(" AND po.status = $%d", argIndex)
+		args = append(args, filters.Status)
+		argIndex++
+	}
+
+	query += " ORDER BY po.id DESC"
+
+	rows, err := m.DB.Query(context.Background(), query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := []PurchaseOrder{}
 	for rows.Next() {
 		var o PurchaseOrder
 		var supplierName sql.NullString

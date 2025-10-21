@@ -37,7 +37,11 @@ func SetupRouter(db *pgxpool.Pool, jwtSecret string, logger *slog.Logger) http.H
 	api.Handle("/dashboard/charts", middleware.JWTMiddleware(http.HandlerFunc(handlers.GetDashboardCharts(db)), jwtSecret)).Methods("GET")
 
 	// Reports endpoints (protected)
-	api.Handle("/reports/products/csv", middleware.JWTMiddleware(http.HandlerFunc(handlers.ExportProductsCSV(db)), jwtSecret)).Methods("GET")
+	api.Handle("/reports/products/xlsx", middleware.JWTMiddleware(http.HandlerFunc(handlers.ExportProductsXLSX(db)), jwtSecret)).Methods("GET")
+	api.Handle("/reports/customers/xlsx", middleware.JWTMiddleware(http.HandlerFunc(handlers.ExportCustomersXLSX(db)), jwtSecret)).Methods("GET")
+	api.Handle("/reports/suppliers/xlsx", middleware.JWTMiddleware(http.HandlerFunc(handlers.ExportSuppliersXLSX(db)), jwtSecret)).Methods("GET")
+	api.Handle("/reports/sales-orders/xlsx", middleware.JWTMiddleware(http.HandlerFunc(handlers.ExportSalesOrdersXLSX(db)), jwtSecret)).Methods("GET")
+	api.Handle("/reports/purchase-orders/xlsx", middleware.JWTMiddleware(http.HandlerFunc(handlers.ExportPurchaseOrdersXLSX(db)), jwtSecret)).Methods("GET")
 
 	// Suppliers endpoints (protected by JWT middleware)
 	api.Handle("/suppliers", middleware.JWTMiddleware(http.HandlerFunc(handlers.ListSuppliers(db)), jwtSecret)).Methods("GET")

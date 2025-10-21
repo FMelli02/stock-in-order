@@ -10,10 +10,11 @@ import (
 
 	"stock-in-order/backend/internal/handlers"
 	"stock-in-order/backend/internal/middleware"
+	"stock-in-order/backend/internal/rabbitmq"
 )
 
 // SetupRouter wires up HTTP routes.
-func SetupRouter(db *pgxpool.Pool, jwtSecret string, logger *slog.Logger) http.Handler {
+func SetupRouter(db *pgxpool.Pool, rabbit *rabbitmq.Client, jwtSecret string, logger *slog.Logger) http.Handler {
 	r := mux.NewRouter()
 
 	// API v1
@@ -37,6 +38,12 @@ func SetupRouter(db *pgxpool.Pool, jwtSecret string, logger *slog.Logger) http.H
 	api.Handle("/dashboard/charts", middleware.JWTMiddleware(http.HandlerFunc(handlers.GetDashboardCharts(db)), jwtSecret)).Methods("GET")
 
 	// Reports endpoints (protected)
+	// Async reports via email (new approach)
+	api.Handle("/reports/products/email", middleware.JWTMiddleware(http.HandlerFunc(handlers.RequestProductsReportByEmail(db, rabbit)), jwtSecret)).Methods("POST")
+	api.Handle("/reports/customers/email", middleware.JWTMiddleware(http.HandlerFunc(handlers.RequestCustomersReportByEmail(db, rabbit)), jwtSecret)).Methods("POST")
+	api.Handle("/reports/suppliers/email", middleware.JWTMiddleware(http.HandlerFunc(handlers.RequestSuppliersReportByEmail(db, rabbit)), jwtSecret)).Methods("POST")
+
+	// Legacy: Direct download endpoints (kept for backwards compatibility)
 	api.Handle("/reports/products/xlsx", middleware.JWTMiddleware(http.HandlerFunc(handlers.ExportProductsXLSX(db)), jwtSecret)).Methods("GET")
 	api.Handle("/reports/customers/xlsx", middleware.JWTMiddleware(http.HandlerFunc(handlers.ExportCustomersXLSX(db)), jwtSecret)).Methods("GET")
 	api.Handle("/reports/suppliers/xlsx", middleware.JWTMiddleware(http.HandlerFunc(handlers.ExportSuppliersXLSX(db)), jwtSecret)).Methods("GET")

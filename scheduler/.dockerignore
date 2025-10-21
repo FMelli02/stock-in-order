@@ -1,0 +1,19 @@
+# Binarios
+scheduler
+*.exe
+
+# Archivos de test
+*_test.go
+
+# Módulos de Go
+vendor/
+
+# Archivos IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Sistema operativo
+.DS_Store
+Thumbs.db

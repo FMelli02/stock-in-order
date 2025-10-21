@@ -94,28 +94,13 @@ export default function CustomersPage() {
     }
   }
 
-  const handleExportExcel = async () => {
+  const handleRequestReportByEmail = async () => {
     try {
-      const response = await api.get('/reports/customers/xlsx', {
-        responseType: 'blob',
-      })
-
-      const blob = new Blob([response.data], { 
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
-      })
-      const url = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.setAttribute('download', 'clientes.xlsx')
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-      window.URL.revokeObjectURL(url)
-
-      toast.success('Clientes exportados a Excel correctamente')
+      const response = await api.post<{ message: string }>('/reports/customers/email')
+      toast.success(response.data.message || '¡Listo! Te estamos mandando el reporte por mail.')
     } catch (err) {
       console.error(err)
-      toast.error('Error al exportar clientes')
+      toast.error('No se pudo solicitar el reporte')
     }
   }
 
@@ -125,13 +110,14 @@ export default function CustomersPage() {
         <h1 className="text-2xl font-bold">Clientes</h1>
         <div className="flex gap-2">
           <button
-            onClick={handleExportExcel}
-            className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-2"
+            onClick={handleRequestReportByEmail}
+            className="px-4 py-2 rounded bg-purple-600 text-white hover:bg-purple-700 flex items-center gap-2"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+              <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
+              <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
             </svg>
-            Exportar Excel
+            Recibir por Email
           </button>
           <button onClick={openCreateModal} className="px-4 py-2 rounded bg-green-600 text-white hover:bg-green-700">
             Crear Nuevo Cliente

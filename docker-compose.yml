@@ -17,6 +17,24 @@ services:
       timeout: 3s
       retries: 5
 
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: stock_in_order_rabbitmq
+    restart: always
+    environment:
+      RABBITMQ_DEFAULT_USER: user
+      RABBITMQ_DEFAULT_PASS: pass
+    ports:
+      - "5672:5672"   # Puerto para conexiones AMQP
+      - "15672:15672" # Puerto para interfaz web de administración
+    volumes:
+      - ./rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   api:
     container_name: stock_in_order_api
     build:
@@ -29,8 +47,11 @@ services:
       JWT_SECRET: "dev-jwt-secret-change-me"
       ENVIRONMENT: "development"
       SENTRY_DSN: "${SENTRY_DSN_BACKEND:-}"  # Optional: set via .env file
+      RABBITMQ_URL: "amqp://user:pass@rabbitmq:5672/"
     depends_on:
       postgres_db:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
@@ -48,6 +69,34 @@ services:
     command: >-
       sh -c 'for f in /migrations/*.sql; do echo "Applying $$f"; psql -h postgres_db -U user -d stock_db -f "$$f"; done'
     restart: "no"
+
+  worker:
+    container_name: stock_in_order_worker
+    build:
+      context: ./worker
+    environment:
+      DB_DSN: "postgres://user:pass@postgres_db:5432/stock_db?sslmode=disable"
+      RABBITMQ_URL: "amqp://user:pass@rabbitmq:5672/"
+      SENDGRID_API_KEY: "${SENDGRID_API_KEY:-}"  # Optional: set via .env file
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  scheduler:
+    container_name: stock_in_order_scheduler
+    build:
+      context: ./scheduler
+    environment:
+      RABBITMQ_URL: "amqp://user:pass@rabbitmq:5672/"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
 
   frontend:
     container_name: stock_in_order_frontend

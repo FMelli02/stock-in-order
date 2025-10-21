@@ -7,6 +7,9 @@
 # Datos de la base de datos local de Docker
 postgres-data/
 
+# Datos de RabbitMQ local de Docker
+rabbitmq-data/
+
 # Binarios de Go
 backend/api
 backend/api.exe

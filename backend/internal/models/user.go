@@ -66,3 +66,20 @@ func (m *UserModel) GetByEmail(email string) (*User, error) {
 	}
 	return &u, nil
 }
+
+// GetByID fetches a user by ID.
+func (m *UserModel) GetByID(id int64) (*User, error) {
+	const q = `
+		SELECT id, name, email, password_hash, created_at
+		FROM users
+		WHERE id = $1`
+
+	var u User
+	err := m.DB.QueryRow(context.Background(), q, id).Scan(
+		&u.ID, &u.Name, &u.Email, &u.PasswordHash, &u.CreatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &u, nil
+}

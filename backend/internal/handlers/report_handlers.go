@@ -1,14 +1,18 @@
 package handlers
 
 import (
+	"context"
+	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/xuri/excelize/v2"
 
 	"stock-in-order/backend/internal/middleware"
 	"stock-in-order/backend/internal/models"
+	"stock-in-order/backend/internal/rabbitmq"
 )
 
 // ExportProductsXLSX maneja GET /api/v1/reports/products/xlsx
@@ -366,5 +370,138 @@ func ExportPurchaseOrdersXLSX(db *pgxpool.Pool) http.HandlerFunc {
 			http.Error(w, "could not write Excel file", http.StatusInternalServerError)
 			return
 		}
+	}
+}
+
+// ============================================================================
+// NUEVOS HANDLERS ASÍNCRONOS - DELEGACIÓN AL WORKER
+// ============================================================================
+
+// RequestProductsReportByEmail maneja POST /api/v1/reports/products/email
+// Publica un mensaje a RabbitMQ para que el worker genere el reporte y lo envíe por email
+func RequestProductsReportByEmail(db *pgxpool.Pool, rabbit *rabbitmq.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID, ok := middleware.UserIDFromContext(r.Context())
+		if !ok {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		// Obtener el email del usuario desde la base de datos
+		um := &models.UserModel{DB: db}
+		user, err := um.GetByID(userID)
+		if err != nil {
+			http.Error(w, "could not fetch user info", http.StatusInternalServerError)
+			return
+		}
+
+		// Crear mensaje para RabbitMQ
+		req := rabbitmq.ReportRequest{
+			UserID:     userID,
+			Email:      user.Email,
+			ReportType: "products",
+		}
+
+		// Publicar mensaje a la cola
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+
+		if err := rabbit.PublishReportRequest(ctx, req); err != nil {
+			http.Error(w, "could not queue report request", http.StatusInternalServerError)
+			return
+		}
+
+		// Responder inmediatamente con 202 Accepted
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusAccepted)
+		json.NewEncoder(w).Encode(map[string]string{
+			"message": "Tu reporte se está generando y te llegará por email en unos minutos.",
+		})
+	}
+}
+
+// RequestCustomersReportByEmail maneja POST /api/v1/reports/customers/email
+// Publica un mensaje a RabbitMQ para que el worker genere el reporte y lo envíe por email
+func RequestCustomersReportByEmail(db *pgxpool.Pool, rabbit *rabbitmq.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID, ok := middleware.UserIDFromContext(r.Context())
+		if !ok {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		// Obtener el email del usuario desde la base de datos
+		um := &models.UserModel{DB: db}
+		user, err := um.GetByID(userID)
+		if err != nil {
+			http.Error(w, "could not fetch user info", http.StatusInternalServerError)
+			return
+		}
+
+		// Crear mensaje para RabbitMQ
+		req := rabbitmq.ReportRequest{
+			UserID:     userID,
+			Email:      user.Email,
+			ReportType: "customers",
+		}
+
+		// Publicar mensaje a la cola
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+
+		if err := rabbit.PublishReportRequest(ctx, req); err != nil {
+			http.Error(w, "could not queue report request", http.StatusInternalServerError)
+			return
+		}
+
+		// Responder inmediatamente con 202 Accepted
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusAccepted)
+		json.NewEncoder(w).Encode(map[string]string{
+			"message": "Tu reporte se está generando y te llegará por email en unos minutos.",
+		})
+	}
+}
+
+// RequestSuppliersReportByEmail maneja POST /api/v1/reports/suppliers/email
+// Publica un mensaje a RabbitMQ para que el worker genere el reporte y lo envíe por email
+func RequestSuppliersReportByEmail(db *pgxpool.Pool, rabbit *rabbitmq.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID, ok := middleware.UserIDFromContext(r.Context())
+		if !ok {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		// Obtener el email del usuario desde la base de datos
+		um := &models.UserModel{DB: db}
+		user, err := um.GetByID(userID)
+		if err != nil {
+			http.Error(w, "could not fetch user info", http.StatusInternalServerError)
+			return
+		}
+
+		// Crear mensaje para RabbitMQ
+		req := rabbitmq.ReportRequest{
+			UserID:     userID,
+			Email:      user.Email,
+			ReportType: "suppliers",
+		}
+
+		// Publicar mensaje a la cola
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+
+		if err := rabbit.PublishReportRequest(ctx, req); err != nil {
+			http.Error(w, "could not queue report request", http.StatusInternalServerError)
+			return
+		}
+
+		// Responder inmediatamente con 202 Accepted
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusAccepted)
+		json.NewEncoder(w).Encode(map[string]string{
+			"message": "Tu reporte se está generando y te llegará por email en unos minutos.",
+		})
 	}
 }

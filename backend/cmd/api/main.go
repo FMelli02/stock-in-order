@@ -8,6 +8,7 @@ import (
 
 	"stock-in-order/backend/internal/config"
 	"stock-in-order/backend/internal/database"
+	"stock-in-order/backend/internal/rabbitmq"
 	"stock-in-order/backend/internal/router"
 
 	"github.com/getsentry/sentry-go"
@@ -69,8 +70,23 @@ func main() {
 	defer pool.Close()
 	logger.Info("Conexión a base de datos establecida")
 
+	// Connect to RabbitMQ
+	rabbitURL := os.Getenv("RABBITMQ_URL")
+	if rabbitURL == "" {
+		rabbitURL = "amqp://user:pass@localhost:5672/"
+	}
+
+	rabbitClient, err := rabbitmq.Connect(rabbitURL, logger)
+	if err != nil {
+		logger.Error("Error conectando a RabbitMQ", "error", err)
+		sentry.CaptureException(err)
+		os.Exit(1)
+	}
+	defer rabbitClient.Close()
+	logger.Info("Conexión a RabbitMQ establecida")
+
 	// Initialize router with routes
-	r := router.SetupRouter(pool, cfg.JWTSecret, logger)
+	r := router.SetupRouter(pool, rabbitClient, cfg.JWTSecret, logger)
 
 	// Start HTTP server
 	srv := &http.Server{

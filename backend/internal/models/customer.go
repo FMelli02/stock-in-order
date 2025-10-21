@@ -2,9 +2,11 @@ package models
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -68,7 +70,7 @@ func (m *CustomerModel) GetAllForUser(userID int64) ([]Customer, error) {
 	}
 	defer rows.Close()
 
-	var out []Customer
+	out := []Customer{} // Initialize as empty slice instead of nil
 	for rows.Next() {
 		var c Customer
 		if err := rows.Scan(&c.ID, &c.Name, &c.Email, &c.Phone, &c.Address, &c.UserID, &c.CreatedAt); err != nil {
@@ -107,6 +109,10 @@ func (m *CustomerModel) Delete(id int64, userID int64) error {
 
 	tag, err := m.DB.Exec(context.Background(), q, id, userID)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23503" { // foreign_key_violation
+			return ErrHasReferences
+		}
 		return err
 	}
 	if tag.RowsAffected() == 0 {

@@ -40,7 +40,7 @@ func (m *StockMovementModel) GetForProduct(productID int64, userID int64) ([]Sto
 	}
 	defer rows.Close()
 
-	var out []StockMovement
+	out := []StockMovement{} // Initialize as empty slice instead of nil
 	for rows.Next() {
 		var sm StockMovement
 		if err := rows.Scan(&sm.ID, &sm.ProductID, &sm.QuantityChange, &sm.Reason, &sm.ReferenceID, &sm.UserID, &sm.CreatedAt); err != nil {

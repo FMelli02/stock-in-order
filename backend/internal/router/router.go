@@ -22,54 +22,47 @@ func SetupRouter(db *pgxpool.Pool, jwtSecret string, logger *slog.Logger) http.H
 	api.HandleFunc("/users/register", handlers.RegisterUser(db)).Methods("POST")
 	api.HandleFunc("/users/login", handlers.LoginUser(db, jwtSecret)).Methods("POST")
 
-	// Products subrouter protected by JWT middleware
-	products := api.PathPrefix("/products").Subrouter()
-	products.Use(func(next http.Handler) http.Handler { return middleware.JWTMiddleware(next, jwtSecret) })
-	products.HandleFunc("/", handlers.CreateProduct(db)).Methods("POST")
-	products.HandleFunc("/", handlers.ListProducts(db)).Methods("GET")
-	products.HandleFunc("/{id:[0-9]+}", handlers.GetProduct(db)).Methods("GET")
-	products.HandleFunc("/{id:[0-9]+}", handlers.UpdateProduct(db)).Methods("PUT")
-	products.HandleFunc("/{id:[0-9]+}", handlers.DeleteProduct(db)).Methods("DELETE")
-	products.HandleFunc("/{id:[0-9]+}/movements", handlers.GetProductMovements(db)).Methods("GET")
-	products.HandleFunc("/{id:[0-9]+}/adjust-stock", handlers.AdjustProductStock(db)).Methods("POST")
+	// Products endpoints (protected by JWT middleware)
+	api.Handle("/products", middleware.JWTMiddleware(http.HandlerFunc(handlers.ListProducts(db)), jwtSecret)).Methods("GET")
+	api.Handle("/products", middleware.JWTMiddleware(http.HandlerFunc(handlers.CreateProduct(db)), jwtSecret)).Methods("POST")
+	api.Handle("/products/{id:[0-9]+}", middleware.JWTMiddleware(http.HandlerFunc(handlers.GetProduct(db)), jwtSecret)).Methods("GET")
+	api.Handle("/products/{id:[0-9]+}", middleware.JWTMiddleware(http.HandlerFunc(handlers.UpdateProduct(db)), jwtSecret)).Methods("PUT")
+	api.Handle("/products/{id:[0-9]+}", middleware.JWTMiddleware(http.HandlerFunc(handlers.DeleteProduct(db)), jwtSecret)).Methods("DELETE")
+	api.Handle("/products/{id:[0-9]+}/movements", middleware.JWTMiddleware(http.HandlerFunc(handlers.GetProductMovements(db)), jwtSecret)).Methods("GET")
+	api.Handle("/products/{id:[0-9]+}/adjust-stock", middleware.JWTMiddleware(http.HandlerFunc(handlers.AdjustProductStock(db)), jwtSecret)).Methods("POST")
 
 	// Dashboard metrics (protected)
-	dashboard := api.PathPrefix("/dashboard").Subrouter()
-	dashboard.Use(func(next http.Handler) http.Handler { return middleware.JWTMiddleware(next, jwtSecret) })
-	dashboard.HandleFunc("/metrics", handlers.GetDashboardMetrics(db)).Methods("GET")
+	api.Handle("/dashboard/metrics", middleware.JWTMiddleware(http.HandlerFunc(handlers.GetDashboardMetrics(db)), jwtSecret)).Methods("GET")
+	api.Handle("/dashboard/kpis", middleware.JWTMiddleware(http.HandlerFunc(handlers.GetDashboardKPIs(db)), jwtSecret)).Methods("GET")
+	api.Handle("/dashboard/charts", middleware.JWTMiddleware(http.HandlerFunc(handlers.GetDashboardCharts(db)), jwtSecret)).Methods("GET")
 
-	// Suppliers subrouter protected by JWT middleware
-	suppliers := api.PathPrefix("/suppliers").Subrouter()
-	suppliers.Use(func(next http.Handler) http.Handler { return middleware.JWTMiddleware(next, jwtSecret) })
-	suppliers.HandleFunc("/", handlers.CreateSupplier(db)).Methods("POST")
-	suppliers.HandleFunc("/", handlers.ListSuppliers(db)).Methods("GET")
-	suppliers.HandleFunc("/{id:[0-9]+}", handlers.GetSupplier(db)).Methods("GET")
-	suppliers.HandleFunc("/{id:[0-9]+}", handlers.UpdateSupplier(db)).Methods("PUT")
-	suppliers.HandleFunc("/{id:[0-9]+}", handlers.DeleteSupplier(db)).Methods("DELETE")
+	// Reports endpoints (protected)
+	api.Handle("/reports/products/csv", middleware.JWTMiddleware(http.HandlerFunc(handlers.ExportProductsCSV(db)), jwtSecret)).Methods("GET")
 
-	// Customers subrouter protected by JWT middleware
-	customers := api.PathPrefix("/customers").Subrouter()
-	customers.Use(func(next http.Handler) http.Handler { return middleware.JWTMiddleware(next, jwtSecret) })
-	customers.HandleFunc("/", handlers.CreateCustomer(db)).Methods("POST")
-	customers.HandleFunc("/", handlers.ListCustomers(db)).Methods("GET")
-	customers.HandleFunc("/{id:[0-9]+}", handlers.GetCustomer(db)).Methods("GET")
-	customers.HandleFunc("/{id:[0-9]+}", handlers.UpdateCustomer(db)).Methods("PUT")
-	customers.HandleFunc("/{id:[0-9]+}", handlers.DeleteCustomer(db)).Methods("DELETE")
+	// Suppliers endpoints (protected by JWT middleware)
+	api.Handle("/suppliers", middleware.JWTMiddleware(http.HandlerFunc(handlers.ListSuppliers(db)), jwtSecret)).Methods("GET")
+	api.Handle("/suppliers", middleware.JWTMiddleware(http.HandlerFunc(handlers.CreateSupplier(db)), jwtSecret)).Methods("POST")
+	api.Handle("/suppliers/{id:[0-9]+}", middleware.JWTMiddleware(http.HandlerFunc(handlers.GetSupplier(db)), jwtSecret)).Methods("GET")
+	api.Handle("/suppliers/{id:[0-9]+}", middleware.JWTMiddleware(http.HandlerFunc(handlers.UpdateSupplier(db)), jwtSecret)).Methods("PUT")
+	api.Handle("/suppliers/{id:[0-9]+}", middleware.JWTMiddleware(http.HandlerFunc(handlers.DeleteSupplier(db)), jwtSecret)).Methods("DELETE")
 
-	// Sales orders
-	sales := api.PathPrefix("/sales-orders").Subrouter()
-	sales.Use(func(next http.Handler) http.Handler { return middleware.JWTMiddleware(next, jwtSecret) })
-	sales.HandleFunc("/", handlers.CreateSalesOrder(db)).Methods("POST")
-	sales.HandleFunc("/", handlers.GetSalesOrders(db)).Methods("GET")
-	sales.HandleFunc("/{id:[0-9]+}", handlers.GetSalesOrderByID(db)).Methods("GET")
+	// Customers endpoints (protected by JWT middleware)
+	api.Handle("/customers", middleware.JWTMiddleware(http.HandlerFunc(handlers.ListCustomers(db)), jwtSecret)).Methods("GET")
+	api.Handle("/customers", middleware.JWTMiddleware(http.HandlerFunc(handlers.CreateCustomer(db)), jwtSecret)).Methods("POST")
+	api.Handle("/customers/{id:[0-9]+}", middleware.JWTMiddleware(http.HandlerFunc(handlers.GetCustomer(db)), jwtSecret)).Methods("GET")
+	api.Handle("/customers/{id:[0-9]+}", middleware.JWTMiddleware(http.HandlerFunc(handlers.UpdateCustomer(db)), jwtSecret)).Methods("PUT")
+	api.Handle("/customers/{id:[0-9]+}", middleware.JWTMiddleware(http.HandlerFunc(handlers.DeleteCustomer(db)), jwtSecret)).Methods("DELETE")
 
-	// Purchase orders
-	purchase := api.PathPrefix("/purchase-orders").Subrouter()
-	purchase.Use(func(next http.Handler) http.Handler { return middleware.JWTMiddleware(next, jwtSecret) })
-	purchase.HandleFunc("/", handlers.CreatePurchaseOrder(db)).Methods("POST")
-	purchase.HandleFunc("/", handlers.GetPurchaseOrders(db)).Methods("GET")
-	purchase.HandleFunc("/{id:[0-9]+}", handlers.GetPurchaseOrderByID(db)).Methods("GET")
-	purchase.HandleFunc("/{id:[0-9]+}/status", handlers.UpdatePurchaseOrderStatus(db)).Methods("PUT")
+	// Sales orders (protected by JWT middleware)
+	api.Handle("/sales-orders", middleware.JWTMiddleware(http.HandlerFunc(handlers.CreateSalesOrder(db)), jwtSecret)).Methods("POST")
+	api.Handle("/sales-orders", middleware.JWTMiddleware(http.HandlerFunc(handlers.GetSalesOrders(db)), jwtSecret)).Methods("GET")
+	api.Handle("/sales-orders/{id:[0-9]+}", middleware.JWTMiddleware(http.HandlerFunc(handlers.GetSalesOrderByID(db)), jwtSecret)).Methods("GET")
+
+	// Purchase orders (protected by JWT middleware)
+	api.Handle("/purchase-orders", middleware.JWTMiddleware(http.HandlerFunc(handlers.CreatePurchaseOrder(db)), jwtSecret)).Methods("POST")
+	api.Handle("/purchase-orders", middleware.JWTMiddleware(http.HandlerFunc(handlers.GetPurchaseOrders(db)), jwtSecret)).Methods("GET")
+	api.Handle("/purchase-orders/{id:[0-9]+}", middleware.JWTMiddleware(http.HandlerFunc(handlers.GetPurchaseOrderByID(db)), jwtSecret)).Methods("GET")
+	api.Handle("/purchase-orders/{id:[0-9]+}/status", middleware.JWTMiddleware(http.HandlerFunc(handlers.UpdatePurchaseOrderStatus(db)), jwtSecret)).Methods("PUT")
 
 	// Configure CORS for Vite dev server and common API usage
 	c := cors.New(cors.Options{
@@ -79,10 +72,11 @@ func SetupRouter(db *pgxpool.Pool, jwtSecret string, logger *slog.Logger) http.H
 		AllowCredentials: true,
 	})
 
-	// Apply middlewares in order: CORS → Logging → Sentry → Routes
-	handler := c.Handler(r)
+	// Apply middlewares in order: Sentry (innermost) → Logging → CORS (outermost)
+	// This ensures: CORS first, then logging captures the request, then Sentry catches panics, then routes
+	handler := middleware.SentryMiddleware(r, logger)
 	handler = middleware.LoggingMiddleware(logger)(handler)
-	handler = middleware.SentryMiddleware(handler, logger)
+	handler = c.Handler(handler)
 
 	return handler
 }

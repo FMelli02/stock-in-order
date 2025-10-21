@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -162,7 +163,15 @@ func DeleteCustomer(db *pgxpool.Pool) http.HandlerFunc {
 				http.NotFound(w, r)
 				return
 			}
-			http.Error(w, "could not delete customer", http.StatusInternalServerError)
+			if err == models.ErrHasReferences {
+				w.WriteHeader(http.StatusConflict)
+				_ = json.NewEncoder(w).Encode(map[string]string{
+					"error": "No se puede eliminar el cliente porque tiene órdenes de venta asociadas",
+				})
+				return
+			}
+			slog.Error("DeleteCustomer failed", "error", err, "customerID", id, "userID", userID)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 

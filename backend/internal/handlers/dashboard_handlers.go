@@ -33,3 +33,45 @@ func GetDashboardMetrics(db *pgxpool.Pool) http.HandlerFunc {
 		_ = json.NewEncoder(w).Encode(metrics)
 	}
 }
+
+// GetDashboardKPIs maneja GET /api/v1/dashboard/kpis
+func GetDashboardKPIs(db *pgxpool.Pool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID, ok := middleware.UserIDFromContext(r.Context())
+		if !ok {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		dm := &models.DashboardModel{DB: db}
+		kpis, err := dm.GetDashboardKPIs(userID)
+		if err != nil {
+			http.Error(w, "could not fetch KPIs", http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(kpis)
+	}
+}
+
+// GetDashboardCharts maneja GET /api/v1/dashboard/charts
+func GetDashboardCharts(db *pgxpool.Pool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID, ok := middleware.UserIDFromContext(r.Context())
+		if !ok {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		dm := &models.DashboardModel{DB: db}
+		chartData, err := dm.GetChartData(userID)
+		if err != nil {
+			http.Error(w, "could not fetch chart data", http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(chartData)
+	}
+}

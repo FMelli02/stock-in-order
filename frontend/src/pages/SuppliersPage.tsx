@@ -88,9 +88,10 @@ export default function SuppliersPage() {
       await api.delete(`/suppliers/${supplier.id}`)
       toast.success('Proveedor eliminado correctamente')
       await fetchSuppliers()
-    } catch (err) {
+    } catch (err: any) {
       console.error(err)
-      toast.error('No se pudo eliminar el proveedor')
+      const errorMessage = err.response?.data?.error || 'No se pudo eliminar el proveedor'
+      toast.error(errorMessage)
     }
   }
 

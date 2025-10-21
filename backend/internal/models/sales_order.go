@@ -129,7 +129,7 @@ func (m *SalesOrderModel) GetAllForUser(userID int64) ([]SalesOrder, error) {
 	}
 	defer rows.Close()
 
-	var out []SalesOrder
+	out := []SalesOrder{} // Initialize as empty slice instead of nil
 	for rows.Next() {
 		var o SalesOrder
 		var customerName sql.NullString

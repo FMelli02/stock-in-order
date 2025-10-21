@@ -168,7 +168,8 @@ func UpdatePurchaseOrderStatus(db *pgxpool.Pool) http.HandlerFunc {
 				http.NotFound(w, r)
 				return
 			}
-			http.Error(w, "could not update status", http.StatusInternalServerError)
+			// Log the actual error for debugging
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 

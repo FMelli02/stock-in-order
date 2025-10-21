@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -35,7 +36,7 @@ func CreateProduct(db *pgxpool.Pool) http.HandlerFunc {
 		p := &models.Product{
 			Name:        in.Name,
 			SKU:         in.SKU,
-			Description: in.Description,
+			Description: &in.Description,
 			Quantity:    in.Quantity,
 			UserID:      userID,
 		}
@@ -69,7 +70,8 @@ func ListProducts(db *pgxpool.Pool) http.HandlerFunc {
 		pm := &models.ProductModel{DB: db}
 		items, err := pm.GetAllForUser(userID)
 		if err != nil {
-			http.Error(w, "could not fetch products", http.StatusInternalServerError)
+			slog.Error("ListProducts failed", "error", err, "userID", userID)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -131,7 +133,7 @@ func UpdateProduct(db *pgxpool.Pool) http.HandlerFunc {
 		p := &models.Product{
 			Name:        in.Name,
 			SKU:         in.SKU,
-			Description: in.Description,
+			Description: &in.Description,
 			Quantity:    in.Quantity,
 		}
 
@@ -172,7 +174,15 @@ func DeleteProduct(db *pgxpool.Pool) http.HandlerFunc {
 				http.NotFound(w, r)
 				return
 			}
-			http.Error(w, "could not delete product", http.StatusInternalServerError)
+			if err == models.ErrHasReferences {
+				w.WriteHeader(http.StatusConflict)
+				_ = json.NewEncoder(w).Encode(map[string]string{
+					"error": "No se puede eliminar el producto porque está siendo usado en órdenes de venta o compra",
+				})
+				return
+			}
+			slog.Error("DeleteProduct failed", "error", err, "productID", id, "userID", userID)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 

@@ -70,7 +70,7 @@ export default function PurchaseOrdersPage() {
                     <Link to={`/purchase-orders/${o.id}`} className="text-indigo-600 hover:underline">{o.id}</Link>
                   </td>
                   <td className="px-4 py-2">{o.supplier_name ?? '-'}</td>
-                  <td className="px-4 py-2">{new Date(o.order_date).toLocaleString()}</td>
+                  <td className="px-4 py-2">{o.order_date ? new Date(o.order_date).toLocaleDateString() : '-'}</td>
                   <td className="px-4 py-2">{o.status}</td>
                   <td className="px-4 py-2">
                     <div className="flex gap-2 items-center">

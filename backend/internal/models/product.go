@@ -15,7 +15,7 @@ type Product struct {
 	ID          int64     `json:"id"`
 	Name        string    `json:"name"`
 	SKU         string    `json:"sku"`
-	Description string    `json:"description,omitempty"`
+	Description *string   `json:"description,omitempty"`
 	Quantity    int       `json:"quantity"`
 	UserID      int64     `json:"user_id"`
 	CreatedAt   time.Time `json:"created_at"`
@@ -23,8 +23,9 @@ type Product struct {
 
 // Errors for product operations
 var (
-	ErrNotFound     = errors.New("record not found")
-	ErrDuplicateSKU = errors.New("duplicate sku")
+	ErrNotFound      = errors.New("record not found")
+	ErrDuplicateSKU  = errors.New("duplicate sku")
+	ErrHasReferences = errors.New("cannot delete: record has references in other tables")
 )
 
 // ProductModel wraps DB access for products.
@@ -85,7 +86,7 @@ func (m *ProductModel) GetAllForUser(userID int64) ([]Product, error) {
 	}
 	defer rows.Close()
 
-	var products []Product
+	products := []Product{} // Initialize as empty slice instead of nil
 	for rows.Next() {
 		var p Product
 		if err := rows.Scan(&p.ID, &p.Name, &p.SKU, &p.Description, &p.Quantity, &p.UserID, &p.CreatedAt); err != nil {
@@ -128,6 +129,10 @@ func (m *ProductModel) Delete(id int64, userID int64) error {
 
 	tag, err := m.DB.Exec(context.Background(), q, id, userID)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23503" { // foreign_key_violation
+			return ErrHasReferences
+		}
 		return err
 	}
 	if tag.RowsAffected() == 0 {

@@ -1,6 +1,6 @@
 type Props = {
   title: string
-  value: number
+  value: number | string
   color?: string // Tailwind classes for emphasis (bg/border)
 }
 
@@ -9,8 +9,8 @@ export default function MetricCard({ title, value, color }: Props) {
   const emphasis = color ? `${color}` : ''
   return (
     <div className={`${base} ${emphasis}`.trim()}>
-      <div className="text-sm text-gray-500">{title}</div>
-      <div className="mt-1 text-3xl font-bold">{value}</div>
+      <div className="text-sm text-gray-500 font-medium">{title}</div>
+      <div className="mt-1 text-3xl font-bold text-gray-800">{value}</div>
     </div>
   )
 }

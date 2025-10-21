@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -166,7 +167,15 @@ func DeleteSupplier(db *pgxpool.Pool) http.HandlerFunc {
 				http.NotFound(w, r)
 				return
 			}
-			http.Error(w, "could not delete supplier", http.StatusInternalServerError)
+			if err == models.ErrHasReferences {
+				w.WriteHeader(http.StatusConflict)
+				_ = json.NewEncoder(w).Encode(map[string]string{
+					"error": "No se puede eliminar el proveedor porque tiene órdenes de compra asociadas",
+				})
+				return
+			}
+			slog.Error("DeleteSupplier failed", "error", err, "supplierID", id, "userID", userID)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 

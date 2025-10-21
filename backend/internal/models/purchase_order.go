@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -17,7 +18,7 @@ type PurchaseOrder struct {
 	ID           int64         `json:"id"`
 	SupplierID   sql.NullInt64 `json:"supplier_id"`
 	SupplierName string        `json:"supplier_name,omitempty"`
-	OrderDate    time.Time     `json:"order_date"`
+	OrderDate    *time.Time    `json:"order_date,omitempty"` // Pointer to allow NULL/omitted value
 	Status       string        `json:"status"`
 	UserID       int64         `json:"user_id"`
 }
@@ -52,14 +53,16 @@ func (m *PurchaseOrderModel) Create(order *PurchaseOrder, items []PurchaseOrderI
 
 	const insertOrder = `
 		INSERT INTO purchase_orders (supplier_id, order_date, status, user_id)
-		VALUES ($1, COALESCE($2, NOW()), COALESCE($3, 'pending'), $4)
+		VALUES ($1, NOW(), COALESCE($2, 'pending'), $3)
 		RETURNING id, order_date`
 
+	var orderDate time.Time
 	if err := tx.QueryRow(ctx, insertOrder,
-		order.SupplierID, order.OrderDate, order.Status, order.UserID,
-	).Scan(&order.ID, &order.OrderDate); err != nil {
+		order.SupplierID, order.Status, order.UserID,
+	).Scan(&order.ID, &orderDate); err != nil {
 		return err
 	}
+	order.OrderDate = &orderDate
 
 	const insertItem = `
 		INSERT INTO purchase_order_items (purchase_order_id, product_id, quantity, unit_cost)
@@ -97,13 +100,15 @@ func (m *PurchaseOrderModel) GetAllForUser(userID int64) ([]PurchaseOrder, error
 	}
 	defer rows.Close()
 
-	var out []PurchaseOrder
+	out := []PurchaseOrder{} // Initialize as empty slice instead of nil
 	for rows.Next() {
 		var o PurchaseOrder
 		var supplierName sql.NullString
-		if err := rows.Scan(&o.ID, &o.SupplierID, &o.OrderDate, &o.Status, &o.UserID, &supplierName); err != nil {
+		var orderDate time.Time
+		if err := rows.Scan(&o.ID, &o.SupplierID, &orderDate, &o.Status, &o.UserID, &supplierName); err != nil {
 			return nil, err
 		}
+		o.OrderDate = &orderDate
 		if supplierName.Valid {
 			o.SupplierName = supplierName.String
 		}
@@ -127,14 +132,16 @@ func (m *PurchaseOrderModel) GetByID(orderID int64, userID int64) (*PurchaseOrde
 
 	var o PurchaseOrder
 	var supplierName sql.NullString
+	var orderDate time.Time
 	err := m.DB.QueryRow(context.Background(), qOrder, orderID, userID).
-		Scan(&o.ID, &o.SupplierID, &o.OrderDate, &o.Status, &o.UserID, &supplierName)
+		Scan(&o.ID, &o.SupplierID, &orderDate, &o.Status, &o.UserID, &supplierName)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil, ErrNotFound
 		}
 		return nil, nil, err
 	}
+	o.OrderDate = &orderDate
 	if supplierName.Valid {
 		o.SupplierName = supplierName.String
 	}
@@ -189,43 +196,70 @@ func (m *PurchaseOrderModel) UpdateStatus(orderID int64, userID int64, newStatus
 
 	// If transitioning to completed and not already completed, increase stock
 	if newStatus == "completed" && current != "completed" {
+		slog.Info("UpdateStatus: transitioning to completed", "orderID", orderID, "userID", userID)
 		const qItems = `
 			SELECT product_id, quantity
 			FROM purchase_order_items
 			WHERE purchase_order_id = $1`
 		rows, err := tx.Query(ctx, qItems, orderID)
 		if err != nil {
+			slog.Error("UpdateStatus: failed to query items", "error", err)
 			return err
 		}
-		defer rows.Close()
 
-		const incStock = `UPDATE products SET quantity = quantity + $1 WHERE id = $2`
+		// Read all items into a slice first (can't use tx while iterating rows)
+		type item struct {
+			productID int64
+			qty       int
+		}
+		var items []item
 		for rows.Next() {
 			var productID int64
 			var qty int
 			if err := rows.Scan(&productID, &qty); err != nil {
+				rows.Close()
+				slog.Error("UpdateStatus: failed to scan item", "error", err)
 				return err
 			}
-			if _, err := tx.Exec(ctx, incStock, qty, productID); err != nil {
+			items = append(items, item{productID: productID, qty: qty})
+		}
+		rows.Close()
+
+		if rows.Err() != nil {
+			slog.Error("UpdateStatus: rows error", "error", rows.Err())
+			return rows.Err()
+		}
+
+		// Now update products (tx is free now)
+		const incStock = `UPDATE products SET quantity = quantity + $1 WHERE id = $2 AND user_id = $3`
+		for _, it := range items {
+			slog.Info("UpdateStatus: attempting to update product stock", "productID", it.productID, "qty", it.qty, "userID", userID)
+			result, err := tx.Exec(ctx, incStock, it.qty, it.productID, userID)
+			if err != nil {
+				slog.Error("UpdateStatus: failed to update product stock", "productID", it.productID, "error", err)
 				return err
 			}
+			// Verify that the product was actually updated (exists and belongs to user)
+			if result.RowsAffected() == 0 {
+				errMsg := fmt.Sprintf("product %d not found or does not belong to user %d", it.productID, userID)
+				slog.Error("UpdateStatus: product not updated", "productID", it.productID, "userID", userID)
+				return fmt.Errorf(errMsg)
+			}
+			slog.Info("UpdateStatus: product stock updated successfully", "productID", it.productID, "rowsAffected", result.RowsAffected())
 
 			// Insert stock movement (positive for purchase)
 			const insertMovement = `
 				INSERT INTO stock_movements (product_id, quantity_change, reason, reference_id, user_id)
 				VALUES ($1, $2, $3, $4, $5)`
 			if _, err := tx.Exec(ctx, insertMovement,
-				productID,
-				qty,
+				it.productID,
+				it.qty,
 				"PURCHASE_ORDER",
 				fmt.Sprintf("%d", orderID),
 				userID,
 			); err != nil {
 				return err
 			}
-		}
-		if rows.Err() != nil {
-			return rows.Err()
 		}
 	}
 

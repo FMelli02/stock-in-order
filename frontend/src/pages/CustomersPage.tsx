@@ -88,9 +88,10 @@ export default function CustomersPage() {
       await api.delete(`/customers/${customer.id}`)
       toast.success('Cliente eliminado correctamente')
       await fetchCustomers()
-    } catch (err) {
+    } catch (err: any) {
       console.error(err)
-      toast.error('No se pudo eliminar el cliente')
+      const errorMessage = err.response?.data?.error || 'No se pudo eliminar el cliente'
+      toast.error(errorMessage)
     }
   }
 

@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -17,6 +18,8 @@ type Product struct {
 	SKU         string    `json:"sku"`
 	Description *string   `json:"description,omitempty"`
 	Quantity    int       `json:"quantity"`
+	StockMinimo int       `json:"stock_minimo"`
+	Notificado  bool      `json:"notificado"`
 	UserID      int64     `json:"user_id"`
 	CreatedAt   time.Time `json:"created_at"`
 }
@@ -36,12 +39,12 @@ type ProductModel struct {
 // Insert inserts a new product for a user and sets ID and CreatedAt.
 func (m *ProductModel) Insert(p *Product) error {
 	const q = `
-		INSERT INTO products (name, sku, description, quantity, user_id)
-		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, created_at`
+		INSERT INTO products (name, sku, description, quantity, stock_minimo, user_id)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING id, created_at, notificado`
 
-	err := m.DB.QueryRow(context.Background(), q, p.Name, p.SKU, p.Description, p.Quantity, p.UserID).
-		Scan(&p.ID, &p.CreatedAt)
+	err := m.DB.QueryRow(context.Background(), q, p.Name, p.SKU, p.Description, p.Quantity, p.StockMinimo, p.UserID).
+		Scan(&p.ID, &p.CreatedAt, &p.Notificado)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" { // unique_violation (user_id, sku)
@@ -55,13 +58,13 @@ func (m *ProductModel) Insert(p *Product) error {
 // GetByID returns a product by ID for a given user.
 func (m *ProductModel) GetByID(id int64, userID int64) (*Product, error) {
 	const q = `
-		SELECT id, name, sku, description, quantity, user_id, created_at
+		SELECT id, name, sku, description, quantity, stock_minimo, notificado, user_id, created_at
 		FROM products
 		WHERE id = $1 AND user_id = $2`
 
 	var p Product
 	err := m.DB.QueryRow(context.Background(), q, id, userID).Scan(
-		&p.ID, &p.Name, &p.SKU, &p.Description, &p.Quantity, &p.UserID, &p.CreatedAt,
+		&p.ID, &p.Name, &p.SKU, &p.Description, &p.Quantity, &p.StockMinimo, &p.Notificado, &p.UserID, &p.CreatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -75,7 +78,7 @@ func (m *ProductModel) GetByID(id int64, userID int64) (*Product, error) {
 // GetAllForUser returns all products for a given user.
 func (m *ProductModel) GetAllForUser(userID int64) ([]Product, error) {
 	const q = `
-		SELECT id, name, sku, description, quantity, user_id, created_at
+		SELECT id, name, sku, description, quantity, stock_minimo, notificado, user_id, created_at
 		FROM products
 		WHERE user_id = $1
 		ORDER BY id`
@@ -89,7 +92,7 @@ func (m *ProductModel) GetAllForUser(userID int64) ([]Product, error) {
 	products := []Product{} // Initialize as empty slice instead of nil
 	for rows.Next() {
 		var p Product
-		if err := rows.Scan(&p.ID, &p.Name, &p.SKU, &p.Description, &p.Quantity, &p.UserID, &p.CreatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.Name, &p.SKU, &p.Description, &p.Quantity, &p.StockMinimo, &p.Notificado, &p.UserID, &p.CreatedAt); err != nil {
 			return nil, err
 		}
 		products = append(products, p)
@@ -104,10 +107,10 @@ func (m *ProductModel) GetAllForUser(userID int64) ([]Product, error) {
 func (m *ProductModel) Update(id int64, userID int64, p *Product) error {
 	const q = `
 		UPDATE products
-		SET name = $1, sku = $2, description = $3, quantity = $4
-		WHERE id = $5 AND user_id = $6`
+		SET name = $1, sku = $2, description = $3, quantity = $4, stock_minimo = $5
+		WHERE id = $6 AND user_id = $7`
 
-	tag, err := m.DB.Exec(context.Background(), q, p.Name, p.SKU, p.Description, p.Quantity, id, userID)
+	tag, err := m.DB.Exec(context.Background(), q, p.Name, p.SKU, p.Description, p.Quantity, p.StockMinimo, id, userID)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" { // unique_violation
@@ -162,6 +165,16 @@ func (m *ProductModel) AdjustStock(productID int64, userID int64, quantityChange
 	}
 	if tag.RowsAffected() == 0 {
 		return ErrNotFound
+	}
+
+	// Reset notificado flag if stock is now above minimum
+	const resetNotified = `UPDATE products SET notificado = false WHERE id = $1 AND quantity > stock_minimo`
+	resetResult, err := tx.Exec(ctx, resetNotified, productID)
+	if err != nil {
+		return err
+	}
+	if resetResult.RowsAffected() > 0 {
+		slog.Info("AdjustStock: notificado flag reset to false", "productID", productID)
 	}
 
 	// Inserta el movimiento de stock; reference_id es NULL para ajuste manual

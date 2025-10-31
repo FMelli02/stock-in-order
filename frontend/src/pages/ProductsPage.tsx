@@ -92,9 +92,13 @@ export default function ProductsPage() {
       await api.delete(`/products/${product.id}`)
       toast.success('Producto eliminado correctamente')
       await fetchProducts()
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err)
-      const errorMessage = err.response?.data?.error || 'No se pudo eliminar el producto'
+      let errorMessage = 'No se pudo eliminar el producto'
+      if (isAxiosError(err)) {
+        const data = err.response?.data as { error?: string } | undefined
+        errorMessage = data?.error || errorMessage
+      }
       toast.error(errorMessage)
     }
   }
@@ -141,35 +145,51 @@ export default function ProductsPage() {
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nombre</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SKU</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cantidad en Stock</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock Actual</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock Mínimo</th>
                 <th className="px-6 py-3" />
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {products.map((p) => (
-                <tr key={p.id}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{p.name}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{p.sku}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{p.quantity}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
-                    <button
-                      onClick={() => openEditModal(p)}
-                      className="mr-2 px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
-                    >
-                      Editar
-                    </button>
-                    <button
-                      onClick={() => handleDelete(p)}
-                      className="px-3 py-1 rounded bg-red-600 text-white hover:bg-red-700"
-                    >
-                      Eliminar
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {products.map((p) => {
+                const isLowStock = p.quantity <= p.stock_minimo
+                return (
+                  <tr key={p.id} className={isLowStock ? 'bg-red-50' : ''}>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {p.name}
+                      {isLowStock && (
+                        <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
+                          ⚠️ Stock Bajo
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{p.sku}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      <span className={isLowStock ? 'font-bold text-red-600' : 'text-gray-900'}>
+                        {p.quantity}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{p.stock_minimo}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
+                      <button
+                        onClick={() => openEditModal(p)}
+                        className="mr-2 px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        onClick={() => handleDelete(p)}
+                        className="px-3 py-1 rounded bg-red-600 text-white hover:bg-red-700"
+                      >
+                        Eliminar
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
               {products.length === 0 && (
                 <tr>
-                  <td className="px-6 py-4 text-sm text-gray-500" colSpan={3}>
+                  <td className="px-6 py-4 text-sm text-gray-500" colSpan={5}>
                     No hay productos para mostrar.
                   </td>
                 </tr>

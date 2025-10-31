@@ -27,9 +27,17 @@ func CreateProduct(db *pgxpool.Pool) http.HandlerFunc {
 			SKU         string `json:"sku"`
 			Description string `json:"description"`
 			Quantity    int    `json:"quantity"`
+			StockMinimo int    `json:"stock_minimo"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+
+		// Validación: stock_minimo no puede ser negativo
+		if in.StockMinimo < 0 {
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]any{"error": "stock_minimo cannot be negative"})
 			return
 		}
 
@@ -38,6 +46,7 @@ func CreateProduct(db *pgxpool.Pool) http.HandlerFunc {
 			SKU:         in.SKU,
 			Description: &in.Description,
 			Quantity:    in.Quantity,
+			StockMinimo: in.StockMinimo,
 			UserID:      userID,
 		}
 
@@ -124,9 +133,17 @@ func UpdateProduct(db *pgxpool.Pool) http.HandlerFunc {
 			SKU         string `json:"sku"`
 			Description string `json:"description"`
 			Quantity    int    `json:"quantity"`
+			StockMinimo int    `json:"stock_minimo"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+
+		// Validación: stock_minimo no puede ser negativo
+		if in.StockMinimo < 0 {
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]any{"error": "stock_minimo cannot be negative"})
 			return
 		}
 
@@ -135,6 +152,7 @@ func UpdateProduct(db *pgxpool.Pool) http.HandlerFunc {
 			SKU:         in.SKU,
 			Description: &in.Description,
 			Quantity:    in.Quantity,
+			StockMinimo: in.StockMinimo,
 		}
 
 		pm := &models.ProductModel{DB: db}

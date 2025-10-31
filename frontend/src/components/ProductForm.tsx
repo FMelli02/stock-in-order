@@ -12,6 +12,7 @@ export default function ProductForm({ productToEdit, onSuccess }: Props) {
   const [name, setName] = useState('')
   const [sku, setSku] = useState('')
   const [quantity, setQuantity] = useState<number>(0)
+  const [stockMinimo, setStockMinimo] = useState<number>(0)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -20,10 +21,12 @@ export default function ProductForm({ productToEdit, onSuccess }: Props) {
       setName(productToEdit.name)
       setSku(productToEdit.sku)
       setQuantity(productToEdit.quantity)
+      setStockMinimo(productToEdit.stock_minimo)
     } else {
       setName('')
       setSku('')
       setQuantity(0)
+      setStockMinimo(0)
     }
   }, [productToEdit])
 
@@ -33,10 +36,10 @@ export default function ProductForm({ productToEdit, onSuccess }: Props) {
     setError(null)
     try {
       if (productToEdit) {
-        await api.put(`/products/${productToEdit.id}`, { name, sku, quantity })
+        await api.put(`/products/${productToEdit.id}`, { name, sku, quantity, stock_minimo: stockMinimo })
         toast.success('Producto actualizado correctamente')
       } else {
-        await api.post('/products', { name, sku, quantity })
+        await api.post('/products', { name, sku, quantity, stock_minimo: stockMinimo })
         toast.success('Producto creado correctamente')
       }
       onSuccess()
@@ -83,6 +86,20 @@ export default function ProductForm({ productToEdit, onSuccess }: Props) {
           required
           min={0}
         />
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700">Stock Mínimo</label>
+        <input
+          type="number"
+          className="mt-1 w-full rounded border border-gray-300 px-3 py-2"
+          value={stockMinimo}
+          onChange={(e) => setStockMinimo(Number(e.target.value))}
+          required
+          min={0}
+        />
+        <p className="mt-1 text-xs text-gray-500">
+          Se te notificará cuando el stock caiga por debajo de este nivel
+        </p>
       </div>
       <div className="flex justify-end gap-2">
         <button

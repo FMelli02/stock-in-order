@@ -86,6 +86,95 @@ func (c *Client) SendReportEmail(toEmail, toName, reportType string, attachment 
 	return nil
 }
 
+// SendStockAlertEmail envía un email de alerta de stock bajo
+func (c *Client) SendStockAlertEmail(toEmail, productName string, currentStock, minStock int) error {
+	if c.isDisabled {
+		log.Printf("📧 [MODO DEV] Alerta de stock simulada a %s - Producto: %s (%d/%d)", toEmail, productName, currentStock, minStock)
+		return nil
+	}
+
+	// Crear el email desde
+	from := mail.NewEmail(c.fromName, c.fromEmail)
+
+	// Crear el email hacia
+	to := mail.NewEmail("", toEmail)
+
+	// Asunto
+	subject := "⚠️ ALERTA DE STOCK BAJO - " + productName
+
+	// Contenido HTML
+	htmlContent := fmt.Sprintf(`
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+        .content { background: #fff9f9; padding: 30px; border-radius: 0 0 10px 10px; border: 2px solid #ff6b6b; }
+        .alert-box { background: #ffe0e0; border-left: 4px solid #ff6b6b; padding: 15px; margin: 20px 0; border-radius: 4px; }
+        .stock-info { background: white; padding: 15px; border-radius: 8px; margin: 15px 0; }
+        .stock-current { font-size: 36px; font-weight: bold; color: #ff6b6b; }
+        .stock-min { font-size: 24px; color: #666; }
+        .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
+        .warning-icon { font-size: 48px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="warning-icon">⚠️</div>
+            <h1>ALERTA DE STOCK BAJO</h1>
+        </div>
+        <div class="content">
+            <p><strong>¡OJO!</strong> Te estás quedando sin el siguiente producto:</p>
+            
+            <div class="alert-box">
+                <h2 style="margin-top: 0; color: #ff6b6b;">%s</h2>
+            </div>
+            
+            <div class="stock-info">
+                <p style="margin: 5px 0; color: #666;">Stock Actual:</p>
+                <div class="stock-current">%d unidades</div>
+                
+                <p style="margin: 15px 0 5px 0; color: #666;">Tu Stock Mínimo:</p>
+                <div class="stock-min">%d unidades</div>
+            </div>
+            
+            <div class="alert-box">
+                <p style="margin: 0;"><strong>⚡ Acción Requerida:</strong></p>
+                <p style="margin: 5px 0 0 0;">Te recomendamos realizar un nuevo pedido a tu proveedor lo antes posible para evitar quedarte sin stock.</p>
+            </div>
+            
+            <p style="margin-top: 20px;">Puedes gestionar tus productos desde el panel de <strong>Stock in Order</strong>.</p>
+        </div>
+        <div class="footer">
+            <p>Este es un email automático de alerta de stock.</p>
+            <p>Stock in Order &copy; 2025</p>
+        </div>
+    </div>
+</body>
+</html>
+`, productName, currentStock, minStock)
+
+	// Crear el mensaje
+	message := mail.NewSingleEmail(from, subject, to, "", htmlContent)
+
+	// Enviar el email
+	response, err := c.sgClient.Send(message)
+	if err != nil {
+		return fmt.Errorf("error al enviar email de alerta: %w", err)
+	}
+
+	// Verificar respuesta
+	if response.StatusCode >= 400 {
+		return fmt.Errorf("SendGrid respondió con código %d: %s", response.StatusCode, response.Body)
+	}
+
+	log.Printf("✅ Alerta de stock enviada a %s (código: %d)", toEmail, response.StatusCode)
+	return nil
+}
+
 // getEmailContent devuelve el asunto y contenido HTML según el tipo de reporte
 func getEmailContent(reportType string) (subject string, htmlContent string) {
 	switch reportType {

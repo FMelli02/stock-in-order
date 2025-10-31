@@ -299,6 +299,7 @@ func (m *PurchaseOrderModel) UpdateStatus(orderID int64, userID int64, newStatus
 
 		// Now update products (tx is free now)
 		const incStock = `UPDATE products SET quantity = quantity + $1 WHERE id = $2 AND user_id = $3`
+		const resetNotified = `UPDATE products SET notificado = false WHERE id = $1 AND quantity > stock_minimo`
 		for _, it := range items {
 			slog.Info("UpdateStatus: attempting to update product stock", "productID", it.productID, "qty", it.qty, "userID", userID)
 			result, err := tx.Exec(ctx, incStock, it.qty, it.productID, userID)
@@ -308,11 +309,20 @@ func (m *PurchaseOrderModel) UpdateStatus(orderID int64, userID int64, newStatus
 			}
 			// Verify that the product was actually updated (exists and belongs to user)
 			if result.RowsAffected() == 0 {
-				errMsg := fmt.Sprintf("product %d not found or does not belong to user %d", it.productID, userID)
 				slog.Error("UpdateStatus: product not updated", "productID", it.productID, "userID", userID)
-				return fmt.Errorf(errMsg)
+				return fmt.Errorf("product %d not found or does not belong to user %d", it.productID, userID)
 			}
 			slog.Info("UpdateStatus: product stock updated successfully", "productID", it.productID, "rowsAffected", result.RowsAffected())
+
+			// Reset notificado flag if stock is now above minimum
+			resetResult, err := tx.Exec(ctx, resetNotified, it.productID)
+			if err != nil {
+				slog.Error("UpdateStatus: failed to reset notificado flag", "productID", it.productID, "error", err)
+				return err
+			}
+			if resetResult.RowsAffected() > 0 {
+				slog.Info("UpdateStatus: notificado flag reset to false", "productID", it.productID)
+			}
 
 			// Insert stock movement (positive for purchase)
 			const insertMovement = `

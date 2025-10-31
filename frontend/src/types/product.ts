@@ -3,4 +3,6 @@ export type Product = {
   name: string
   sku: string
   quantity: number
+  stock_minimo: number
+  notificado: boolean
 }

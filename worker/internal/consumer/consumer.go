@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	amqp "github.com/rabbitmq/amqp091-go"
 
+	"stock-in-order/worker/internal/alerts"
 	"stock-in-order/worker/internal/email"
 	"stock-in-order/worker/internal/reports"
 )
@@ -17,6 +18,11 @@ type ReportRequest struct {
 	UserID     int64  `json:"user_id"`
 	Email      string `json:"email_to"`
 	ReportType string `json:"report_type"` // "products", "customers", "suppliers"
+}
+
+// StockAlertRequest representa la estructura del mensaje de alertas de stock
+type StockAlertRequest struct {
+	TaskType string `json:"task_type"` // "check_stock_levels"
 }
 
 // StartConsumer inicia el consumidor que escucha la cola de RabbitMQ
@@ -35,7 +41,7 @@ func StartConsumer(rabbitURL string, db *pgxpool.Pool, emailClient *email.Client
 	}
 	defer ch.Close()
 
-	// Declarar la cola (si no existe, se crea)
+	// Declarar la cola de reportes (si no existe, se crea)
 	queueName := "reporting_queue"
 	q, err := ch.QueueDeclare(
 		queueName, // name
@@ -49,7 +55,23 @@ func StartConsumer(rabbitURL string, db *pgxpool.Pool, emailClient *email.Client
 		return fmt.Errorf("failed to declare a queue: %w", err)
 	}
 
-	log.Printf("📬 Worker conectado a RabbitMQ. Escuchando cola: %s", q.Name)
+	log.Printf("📬 Worker conectado a RabbitMQ. Escuchando cola de reportes: %s", q.Name)
+
+	// Declarar la cola de alertas de stock
+	stockAlertsQueue := "stock_alerts_queue"
+	qStockAlerts, err := ch.QueueDeclare(
+		stockAlertsQueue, // name
+		true,             // durable
+		false,            // delete when unused
+		false,            // exclusive
+		false,            // no-wait
+		nil,              // arguments
+	)
+	if err != nil {
+		return fmt.Errorf("failed to declare stock alerts queue: %w", err)
+	}
+
+	log.Printf("👁️  Worker escuchando cola de stock alerts: %s", qStockAlerts.Name)
 
 	// Configurar QoS (prefetch): procesar 1 mensaje a la vez
 	err = ch.Qos(
@@ -61,7 +83,7 @@ func StartConsumer(rabbitURL string, db *pgxpool.Pool, emailClient *email.Client
 		return fmt.Errorf("failed to set QoS: %w", err)
 	}
 
-	// Registrar el consumidor
+	// Registrar el consumidor de reportes
 	msgs, err := ch.Consume(
 		q.Name, // queue
 		"",     // consumer (empty = auto-generated)
@@ -75,18 +97,32 @@ func StartConsumer(rabbitURL string, db *pgxpool.Pool, emailClient *email.Client
 		return fmt.Errorf("failed to register a consumer: %w", err)
 	}
 
+	// Registrar el consumidor de stock alerts
+	stockAlertsMsgs, err := ch.Consume(
+		qStockAlerts.Name, // queue
+		"",                // consumer
+		false,             // auto-ack
+		false,             // exclusive
+		false,             // no-local
+		false,             // no-wait
+		nil,               // args
+	)
+	if err != nil {
+		return fmt.Errorf("failed to register stock alerts consumer: %w", err)
+	}
+
 	// Canal para mantener el proceso vivo
 	forever := make(chan bool)
 
-	// Goroutine que procesa mensajes
+	// Goroutine que procesa mensajes de reportes
 	go func() {
 		for d := range msgs {
-			log.Printf("📨 Mensaje recibido: %s", d.Body)
+			log.Printf("📨 Mensaje recibido en cola de reportes: %s", d.Body)
 
 			// Parsear el mensaje JSON
 			var req ReportRequest
 			if err := json.Unmarshal(d.Body, &req); err != nil {
-				log.Printf("❌ Error al parsear mensaje: %v", err)
+				log.Printf("❌ Error al parsear mensaje de reporte: %v", err)
 				d.Nack(false, false) // Rechazar mensaje sin reencolar
 				continue
 			}
@@ -100,6 +136,39 @@ func StartConsumer(rabbitURL string, db *pgxpool.Pool, emailClient *email.Client
 
 			// Confirmar que el mensaje fue procesado exitosamente
 			log.Printf("✅ Reporte procesado exitosamente para UserID=%d, ReportType=%s", req.UserID, req.ReportType)
+			d.Ack(false)
+		}
+	}()
+
+	// Goroutine que procesa mensajes de stock alerts
+	go func() {
+		for d := range stockAlertsMsgs {
+			log.Printf("👁️  Mensaje recibido en cola de stock alerts: %s", d.Body)
+
+			// Parsear el mensaje JSON
+			var req StockAlertRequest
+			if err := json.Unmarshal(d.Body, &req); err != nil {
+				log.Printf("❌ Error al parsear mensaje de stock alert: %v", err)
+				d.Nack(false, false)
+				continue
+			}
+
+			// Verificar que sea el tipo correcto de tarea
+			if req.TaskType != "check_stock_levels" {
+				log.Printf("⚠️  Tipo de tarea desconocido: %s", req.TaskType)
+				d.Nack(false, false)
+				continue
+			}
+
+			// Procesar el chequeo de stock
+			if err := alerts.CheckStockLevels(db, emailClient); err != nil {
+				log.Printf("❌ Error al chequear niveles de stock: %v", err)
+				d.Nack(false, true) // Reencolar para reintentar
+				continue
+			}
+
+			// Confirmar que el mensaje fue procesado exitosamente
+			log.Printf("✅ Chequeo de stock completado exitosamente")
 			d.Ack(false)
 		}
 	}()

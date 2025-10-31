@@ -23,57 +23,211 @@ func SetupRouter(db *pgxpool.Pool, rabbit *rabbitmq.Client, jwtSecret string, lo
 	api.HandleFunc("/users/register", handlers.RegisterUser(db)).Methods("POST")
 	api.HandleFunc("/users/login", handlers.LoginUser(db, jwtSecret)).Methods("POST")
 
-	// Products endpoints (protected by JWT middleware)
-	api.Handle("/products", middleware.JWTMiddleware(http.HandlerFunc(handlers.ListProducts(db)), jwtSecret)).Methods("GET")
-	api.Handle("/products", middleware.JWTMiddleware(http.HandlerFunc(handlers.CreateProduct(db)), jwtSecret)).Methods("POST")
-	api.Handle("/products/{id:[0-9]+}", middleware.JWTMiddleware(http.HandlerFunc(handlers.GetProduct(db)), jwtSecret)).Methods("GET")
-	api.Handle("/products/{id:[0-9]+}", middleware.JWTMiddleware(http.HandlerFunc(handlers.UpdateProduct(db)), jwtSecret)).Methods("PUT")
-	api.Handle("/products/{id:[0-9]+}", middleware.JWTMiddleware(http.HandlerFunc(handlers.DeleteProduct(db)), jwtSecret)).Methods("DELETE")
-	api.Handle("/products/{id:[0-9]+}/movements", middleware.JWTMiddleware(http.HandlerFunc(handlers.GetProductMovements(db)), jwtSecret)).Methods("GET")
-	api.Handle("/products/{id:[0-9]+}/adjust-stock", middleware.JWTMiddleware(http.HandlerFunc(handlers.AdjustProductStock(db)), jwtSecret)).Methods("POST")
+	// ============================================
+	// ADMIN - Gestión de Usuarios
+	// ============================================
+	api.Handle("/admin/users",
+		middleware.JWTMiddleware(
+			middleware.RequireRole("admin")(http.HandlerFunc(handlers.CreateUserByAdmin(db))),
+			jwtSecret,
+		),
+	).Methods("POST")
 
-	// Dashboard metrics (protected)
-	api.Handle("/dashboard/metrics", middleware.JWTMiddleware(http.HandlerFunc(handlers.GetDashboardMetrics(db)), jwtSecret)).Methods("GET")
-	api.Handle("/dashboard/kpis", middleware.JWTMiddleware(http.HandlerFunc(handlers.GetDashboardKPIs(db)), jwtSecret)).Methods("GET")
-	api.Handle("/dashboard/charts", middleware.JWTMiddleware(http.HandlerFunc(handlers.GetDashboardCharts(db)), jwtSecret)).Methods("GET")
+	// RBAC Test endpoints (protected by JWT + Role middleware)
+	api.Handle("/test/admin-only",
+		middleware.JWTMiddleware(
+			middleware.RequireRole("admin")(http.HandlerFunc(handlers.AdminOnlyTest())),
+			jwtSecret,
+		),
+	).Methods("GET")
 
-	// Reports endpoints (protected)
-	// Async reports via email (new approach)
-	api.Handle("/reports/products/email", middleware.JWTMiddleware(http.HandlerFunc(handlers.RequestProductsReportByEmail(db, rabbit)), jwtSecret)).Methods("POST")
-	api.Handle("/reports/customers/email", middleware.JWTMiddleware(http.HandlerFunc(handlers.RequestCustomersReportByEmail(db, rabbit)), jwtSecret)).Methods("POST")
-	api.Handle("/reports/suppliers/email", middleware.JWTMiddleware(http.HandlerFunc(handlers.RequestSuppliersReportByEmail(db, rabbit)), jwtSecret)).Methods("POST")
+	api.Handle("/test/vendedor-only",
+		middleware.JWTMiddleware(
+			middleware.RequireRole("vendedor")(http.HandlerFunc(handlers.VendedorOnlyTest())),
+			jwtSecret,
+		),
+	).Methods("GET")
 
-	// Legacy: Direct download endpoints (kept for backwards compatibility)
-	api.Handle("/reports/products/xlsx", middleware.JWTMiddleware(http.HandlerFunc(handlers.ExportProductsXLSX(db)), jwtSecret)).Methods("GET")
-	api.Handle("/reports/customers/xlsx", middleware.JWTMiddleware(http.HandlerFunc(handlers.ExportCustomersXLSX(db)), jwtSecret)).Methods("GET")
-	api.Handle("/reports/suppliers/xlsx", middleware.JWTMiddleware(http.HandlerFunc(handlers.ExportSuppliersXLSX(db)), jwtSecret)).Methods("GET")
-	api.Handle("/reports/sales-orders/xlsx", middleware.JWTMiddleware(http.HandlerFunc(handlers.ExportSalesOrdersXLSX(db)), jwtSecret)).Methods("GET")
-	api.Handle("/reports/purchase-orders/xlsx", middleware.JWTMiddleware(http.HandlerFunc(handlers.ExportPurchaseOrdersXLSX(db)), jwtSecret)).Methods("GET")
+	// ============================================
+	// PRODUCTS - Con protección RBAC
+	// ============================================
+	// Lectura: Todos los autenticados (admin, vendedor, repositor)
+	api.Handle("/products",
+		middleware.JWTMiddleware(http.HandlerFunc(handlers.ListProducts(db)), jwtSecret)).Methods("GET")
+	api.Handle("/products/{id:[0-9]+}",
+		middleware.JWTMiddleware(http.HandlerFunc(handlers.GetProduct(db)), jwtSecret)).Methods("GET")
+	api.Handle("/products/{id:[0-9]+}/movements",
+		middleware.JWTMiddleware(http.HandlerFunc(handlers.GetProductMovements(db)), jwtSecret)).Methods("GET")
 
-	// Suppliers endpoints (protected by JWT middleware)
-	api.Handle("/suppliers", middleware.JWTMiddleware(http.HandlerFunc(handlers.ListSuppliers(db)), jwtSecret)).Methods("GET")
-	api.Handle("/suppliers", middleware.JWTMiddleware(http.HandlerFunc(handlers.CreateSupplier(db)), jwtSecret)).Methods("POST")
-	api.Handle("/suppliers/{id:[0-9]+}", middleware.JWTMiddleware(http.HandlerFunc(handlers.GetSupplier(db)), jwtSecret)).Methods("GET")
-	api.Handle("/suppliers/{id:[0-9]+}", middleware.JWTMiddleware(http.HandlerFunc(handlers.UpdateSupplier(db)), jwtSecret)).Methods("PUT")
-	api.Handle("/suppliers/{id:[0-9]+}", middleware.JWTMiddleware(http.HandlerFunc(handlers.DeleteSupplier(db)), jwtSecret)).Methods("DELETE")
+	// Creación: Admin y Repositor
+	api.Handle("/products",
+		middleware.JWTMiddleware(
+			middleware.RequireRole("admin")(http.HandlerFunc(handlers.CreateProduct(db))),
+			jwtSecret,
+		)).Methods("POST")
 
-	// Customers endpoints (protected by JWT middleware)
-	api.Handle("/customers", middleware.JWTMiddleware(http.HandlerFunc(handlers.ListCustomers(db)), jwtSecret)).Methods("GET")
-	api.Handle("/customers", middleware.JWTMiddleware(http.HandlerFunc(handlers.CreateCustomer(db)), jwtSecret)).Methods("POST")
-	api.Handle("/customers/{id:[0-9]+}", middleware.JWTMiddleware(http.HandlerFunc(handlers.GetCustomer(db)), jwtSecret)).Methods("GET")
-	api.Handle("/customers/{id:[0-9]+}", middleware.JWTMiddleware(http.HandlerFunc(handlers.UpdateCustomer(db)), jwtSecret)).Methods("PUT")
-	api.Handle("/customers/{id:[0-9]+}", middleware.JWTMiddleware(http.HandlerFunc(handlers.DeleteCustomer(db)), jwtSecret)).Methods("DELETE")
+	// Actualización: Admin y Repositor
+	api.Handle("/products/{id:[0-9]+}",
+		middleware.JWTMiddleware(
+			middleware.RequireRole("admin")(http.HandlerFunc(handlers.UpdateProduct(db))),
+			jwtSecret,
+		)).Methods("PUT")
 
-	// Sales orders (protected by JWT middleware)
-	api.Handle("/sales-orders", middleware.JWTMiddleware(http.HandlerFunc(handlers.CreateSalesOrder(db)), jwtSecret)).Methods("POST")
-	api.Handle("/sales-orders", middleware.JWTMiddleware(http.HandlerFunc(handlers.GetSalesOrders(db)), jwtSecret)).Methods("GET")
-	api.Handle("/sales-orders/{id:[0-9]+}", middleware.JWTMiddleware(http.HandlerFunc(handlers.GetSalesOrderByID(db)), jwtSecret)).Methods("GET")
+	// Ajuste de Stock: Solo Repositor y Admin
+	api.Handle("/products/{id:[0-9]+}/adjust-stock",
+		middleware.JWTMiddleware(
+			middleware.RequireRole("repositor")(http.HandlerFunc(handlers.AdjustProductStock(db))),
+			jwtSecret,
+		)).Methods("POST")
 
-	// Purchase orders (protected by JWT middleware)
-	api.Handle("/purchase-orders", middleware.JWTMiddleware(http.HandlerFunc(handlers.CreatePurchaseOrder(db)), jwtSecret)).Methods("POST")
-	api.Handle("/purchase-orders", middleware.JWTMiddleware(http.HandlerFunc(handlers.GetPurchaseOrders(db)), jwtSecret)).Methods("GET")
-	api.Handle("/purchase-orders/{id:[0-9]+}", middleware.JWTMiddleware(http.HandlerFunc(handlers.GetPurchaseOrderByID(db)), jwtSecret)).Methods("GET")
-	api.Handle("/purchase-orders/{id:[0-9]+}/status", middleware.JWTMiddleware(http.HandlerFunc(handlers.UpdatePurchaseOrderStatus(db)), jwtSecret)).Methods("PUT")
+	// Eliminación: Solo Admin
+	api.Handle("/products/{id:[0-9]+}",
+		middleware.JWTMiddleware(
+			middleware.RequireRole("admin")(http.HandlerFunc(handlers.DeleteProduct(db))),
+			jwtSecret,
+		)).Methods("DELETE")
+
+	// ============================================
+	// DASHBOARD - Todos los autenticados
+	// ============================================
+	api.Handle("/dashboard/metrics",
+		middleware.JWTMiddleware(http.HandlerFunc(handlers.GetDashboardMetrics(db)), jwtSecret)).Methods("GET")
+	api.Handle("/dashboard/kpis",
+		middleware.JWTMiddleware(http.HandlerFunc(handlers.GetDashboardKPIs(db)), jwtSecret)).Methods("GET")
+	api.Handle("/dashboard/charts",
+		middleware.JWTMiddleware(http.HandlerFunc(handlers.GetDashboardCharts(db)), jwtSecret)).Methods("GET")
+
+	// ============================================
+	// REPORTS - Todos los autenticados
+	// ============================================
+	api.Handle("/reports/products/email",
+		middleware.JWTMiddleware(http.HandlerFunc(handlers.RequestProductsReportByEmail(db, rabbit)), jwtSecret)).Methods("POST")
+	api.Handle("/reports/customers/email",
+		middleware.JWTMiddleware(http.HandlerFunc(handlers.RequestCustomersReportByEmail(db, rabbit)), jwtSecret)).Methods("POST")
+	api.Handle("/reports/suppliers/email",
+		middleware.JWTMiddleware(http.HandlerFunc(handlers.RequestSuppliersReportByEmail(db, rabbit)), jwtSecret)).Methods("POST")
+
+	api.Handle("/reports/products/xlsx",
+		middleware.JWTMiddleware(http.HandlerFunc(handlers.ExportProductsXLSX(db)), jwtSecret)).Methods("GET")
+	api.Handle("/reports/customers/xlsx",
+		middleware.JWTMiddleware(http.HandlerFunc(handlers.ExportCustomersXLSX(db)), jwtSecret)).Methods("GET")
+	api.Handle("/reports/suppliers/xlsx",
+		middleware.JWTMiddleware(http.HandlerFunc(handlers.ExportSuppliersXLSX(db)), jwtSecret)).Methods("GET")
+	api.Handle("/reports/sales-orders/xlsx",
+		middleware.JWTMiddleware(http.HandlerFunc(handlers.ExportSalesOrdersXLSX(db)), jwtSecret)).Methods("GET")
+	api.Handle("/reports/purchase-orders/xlsx",
+		middleware.JWTMiddleware(http.HandlerFunc(handlers.ExportPurchaseOrdersXLSX(db)), jwtSecret)).Methods("GET")
+
+	// ============================================
+	// SUPPLIERS - Con protección RBAC
+	// ============================================
+	// Lectura: Todos los autenticados
+	api.Handle("/suppliers",
+		middleware.JWTMiddleware(http.HandlerFunc(handlers.ListSuppliers(db)), jwtSecret)).Methods("GET")
+	api.Handle("/suppliers/{id:[0-9]+}",
+		middleware.JWTMiddleware(http.HandlerFunc(handlers.GetSupplier(db)), jwtSecret)).Methods("GET")
+
+	// Creación: Admin y Repositor
+	api.Handle("/suppliers",
+		middleware.JWTMiddleware(
+			middleware.RequireRole("repositor")(http.HandlerFunc(handlers.CreateSupplier(db))),
+			jwtSecret,
+		)).Methods("POST")
+
+	// Actualización: Admin y Repositor
+	api.Handle("/suppliers/{id:[0-9]+}",
+		middleware.JWTMiddleware(
+			middleware.RequireRole("repositor")(http.HandlerFunc(handlers.UpdateSupplier(db))),
+			jwtSecret,
+		)).Methods("PUT")
+
+	// Eliminación: Solo Admin
+	api.Handle("/suppliers/{id:[0-9]+}",
+		middleware.JWTMiddleware(
+			middleware.RequireRole("admin")(http.HandlerFunc(handlers.DeleteSupplier(db))),
+			jwtSecret,
+		)).Methods("DELETE")
+
+	// ============================================
+	// CUSTOMERS - Con protección RBAC
+	// ============================================
+	// Lectura: Admin y Vendedor (repositor NO puede ver clientes)
+	api.Handle("/customers",
+		middleware.JWTMiddleware(
+			middleware.RequireRole("vendedor")(http.HandlerFunc(handlers.ListCustomers(db))),
+			jwtSecret,
+		)).Methods("GET")
+	api.Handle("/customers/{id:[0-9]+}",
+		middleware.JWTMiddleware(
+			middleware.RequireRole("vendedor")(http.HandlerFunc(handlers.GetCustomer(db))),
+			jwtSecret,
+		)).Methods("GET")
+
+	// Creación: Admin y Vendedor
+	api.Handle("/customers",
+		middleware.JWTMiddleware(
+			middleware.RequireRole("vendedor")(http.HandlerFunc(handlers.CreateCustomer(db))),
+			jwtSecret,
+		)).Methods("POST")
+
+	// Actualización: Admin y Vendedor
+	api.Handle("/customers/{id:[0-9]+}",
+		middleware.JWTMiddleware(
+			middleware.RequireRole("vendedor")(http.HandlerFunc(handlers.UpdateCustomer(db))),
+			jwtSecret,
+		)).Methods("PUT")
+
+	// Eliminación: Solo Admin
+	api.Handle("/customers/{id:[0-9]+}",
+		middleware.JWTMiddleware(
+			middleware.RequireRole("admin")(http.HandlerFunc(handlers.DeleteCustomer(db))),
+			jwtSecret,
+		)).Methods("DELETE")
+
+	// ============================================
+	// SALES ORDERS - Con protección RBAC
+	// ============================================
+	// Creación y Lectura: Admin y Vendedor
+	api.Handle("/sales-orders",
+		middleware.JWTMiddleware(
+			middleware.RequireRole("vendedor")(http.HandlerFunc(handlers.CreateSalesOrder(db))),
+			jwtSecret,
+		)).Methods("POST")
+	api.Handle("/sales-orders",
+		middleware.JWTMiddleware(
+			middleware.RequireRole("vendedor")(http.HandlerFunc(handlers.GetSalesOrders(db))),
+			jwtSecret,
+		)).Methods("GET")
+	api.Handle("/sales-orders/{id:[0-9]+}",
+		middleware.JWTMiddleware(
+			middleware.RequireRole("vendedor")(http.HandlerFunc(handlers.GetSalesOrderByID(db))),
+			jwtSecret,
+		)).Methods("GET")
+
+	// ============================================
+	// PURCHASE ORDERS - Con protección RBAC
+	// ============================================
+	// Creación y Gestión: Admin y Repositor
+	api.Handle("/purchase-orders",
+		middleware.JWTMiddleware(
+			middleware.RequireRole("repositor")(http.HandlerFunc(handlers.CreatePurchaseOrder(db))),
+			jwtSecret,
+		)).Methods("POST")
+	api.Handle("/purchase-orders",
+		middleware.JWTMiddleware(
+			middleware.RequireRole("repositor")(http.HandlerFunc(handlers.GetPurchaseOrders(db))),
+			jwtSecret,
+		)).Methods("GET")
+	api.Handle("/purchase-orders/{id:[0-9]+}",
+		middleware.JWTMiddleware(
+			middleware.RequireRole("repositor")(http.HandlerFunc(handlers.GetPurchaseOrderByID(db))),
+			jwtSecret,
+		)).Methods("GET")
+	api.Handle("/purchase-orders/{id:[0-9]+}/status",
+		middleware.JWTMiddleware(
+			middleware.RequireRole("repositor")(http.HandlerFunc(handlers.UpdatePurchaseOrderStatus(db))),
+			jwtSecret,
+		)).Methods("PUT")
 
 	// Configure CORS for Vite dev server and common API usage
 	c := cors.New(cors.Options{

@@ -1,6 +1,7 @@
 import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import * as Sentry from '@sentry/react'
+import { AuthProvider } from './contexts/AuthContext'
 import MainLayout from './layouts/MainLayout'
 import DashboardPage from './pages/DashboardPage'
 import ProductsPage from './pages/ProductsPage'
@@ -15,6 +16,7 @@ import PurchaseOrdersPage from './pages/PurchaseOrdersPage'
 import CreatePurchaseOrderPage from './pages/CreatePurchaseOrderPage'
 import SalesOrderDetailPage from './pages/SalesOrderDetailPage'
 import PurchaseOrderDetailPage from './pages/PurchaseOrderDetailPage'
+import AdminUsersPage from './pages/AdminUsersPage'
 import SentryTestPage from './pages/SentryTestPage'
 
 const router = createBrowserRouter([
@@ -35,6 +37,7 @@ const router = createBrowserRouter([
           { path: 'purchase-orders', element: <PurchaseOrdersPage /> },
           { path: 'purchase-orders/new', element: <CreatePurchaseOrderPage /> },
           { path: 'purchase-orders/:id', element: <PurchaseOrderDetailPage /> },
+          { path: 'admin/users', element: <AdminUsersPage /> }, // Admin only
           { path: 'sentry-test', element: <SentryTestPage /> }, // Testing page
         ],
       },
@@ -46,7 +49,8 @@ const router = createBrowserRouter([
 
 function App() {
   return (
-    <Sentry.ErrorBoundary 
+    <AuthProvider>
+      <Sentry.ErrorBoundary 
       fallback={({ error, resetError }) => (
         <div style={{ 
           padding: '2rem', 
@@ -99,6 +103,7 @@ function App() {
       <Toaster position="top-right" />
       <RouterProvider router={router} />
     </Sentry.ErrorBoundary>
+    </AuthProvider>
   )
 }
 

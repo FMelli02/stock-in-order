@@ -20,6 +20,15 @@ type RegisterUserInput struct {
 	Name     string `json:"name" validate:"required"`
 	Email    string `json:"email" validate:"required,email"`
 	Password string `json:"password" validate:"required,min=8"`
+	Role     string `json:"role,omitempty" validate:"omitempty,oneof=admin vendedor repositor"`
+}
+
+// CreateUserByAdminInput DTO for admin creating a user with explicit role.
+type CreateUserByAdminInput struct {
+	Name     string `json:"name" validate:"required"`
+	Email    string `json:"email" validate:"required,email"`
+	Password string `json:"password" validate:"required,min=8"`
+	Role     string `json:"role" validate:"required,oneof=admin vendedor repositor"`
 }
 
 // LoginUserInput DTO for user login.
@@ -59,6 +68,7 @@ func registerUserHandler(store userInserter) http.HandlerFunc {
 			Name:         in.Name,
 			Email:        in.Email,
 			PasswordHash: hash,
+			Role:         in.Role, // Use role from input (or will default to 'vendedor' in DB)
 		}
 
 		if err := store.Insert(user); err != nil {
@@ -78,6 +88,7 @@ func registerUserHandler(store userInserter) http.HandlerFunc {
 			"id":         user.ID,
 			"name":       user.Name,
 			"email":      user.Email,
+			"role":       user.Role,
 			"created_at": user.CreatedAt,
 		})
 	}
@@ -120,6 +131,7 @@ func LoginUser(db *pgxpool.Pool, jwtSecret string) http.HandlerFunc {
 		// Create JWT token
 		claims := jwt.MapClaims{
 			"user_id": user.ID,
+			"role":    user.Role, // Incluir el rol del usuario en el token
 			"exp":     jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
 			"iat":     jwt.NewNumericDate(time.Now()),
 		}
@@ -133,6 +145,64 @@ func LoginUser(db *pgxpool.Pool, jwtSecret string) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"token": signed,
+			"user": map[string]any{
+				"id":    user.ID,
+				"name":  user.Name,
+				"email": user.Email,
+				"role":  user.Role,
+			},
+		})
+	}
+}
+
+// CreateUserByAdmin creates a new user with explicit role assignment (Admin only).
+func CreateUserByAdmin(db *pgxpool.Pool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var in CreateUserByAdminInput
+		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+
+		if err := validate.Struct(in); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]any{"error": "validation failed", "details": err.Error()})
+			return
+		}
+
+		// Hash password
+		hash, err := bcrypt.GenerateFromPassword([]byte(in.Password), bcrypt.DefaultCost)
+		if err != nil {
+			http.Error(w, "could not hash password", http.StatusInternalServerError)
+			return
+		}
+
+		user := &models.User{
+			Name:         in.Name,
+			Email:        in.Email,
+			PasswordHash: hash,
+			Role:         in.Role, // Explicit role from admin
+		}
+
+		um := &models.UserModel{DB: db}
+		if err := um.Insert(user); err != nil {
+			if err == models.ErrDuplicateEmail {
+				w.WriteHeader(http.StatusConflict)
+				_ = json.NewEncoder(w).Encode(map[string]any{"error": "email already exists"})
+				return
+			}
+			http.Error(w, "could not create user", http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"id":         user.ID,
+			"name":       user.Name,
+			"email":      user.Email,
+			"role":       user.Role,
+			"created_at": user.CreatedAt,
 		})
 	}
 }

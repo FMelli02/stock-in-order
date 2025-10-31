@@ -42,7 +42,7 @@ func main() {
 	// Configurar cliente de SendGrid
 	emailClient := email.NewClient(
 		cfg.SendGrid_APIKey,
-		"noreply@stockinorder.com", // Email remitente
+		"francoleproso1@gmail.com", // Email remitente
 		"Stock in Order",           // Nombre remitente
 	)
 	log.Println("📧 Cliente de email configurado")

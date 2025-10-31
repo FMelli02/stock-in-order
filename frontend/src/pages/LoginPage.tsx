@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../contexts/AuthContext'
 import api from '../services/api'
 
 export default function LoginPage() {
@@ -7,6 +8,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const navigate = useNavigate()
+  const { login } = useAuth()
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -14,8 +16,10 @@ export default function LoginPage() {
     try {
       const res = await api.post('/users/login', { email, password })
       const token = res.data?.token as string | undefined
-      if (token) {
-        localStorage.setItem('authToken', token)
+      const user = res.data?.user
+      
+      if (token && user) {
+        login(token, user)
         navigate('/')
       } else {
         setError('Credenciales incorrectas')

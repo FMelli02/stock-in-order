@@ -9,10 +9,13 @@ import (
 	jwt "github.com/golang-jwt/jwt/v5"
 )
 
-// Context key for user ID
+// Context keys for user data
 type ctxKey string
 
-const userIDKey ctxKey = "user_id"
+const (
+	userIDKey   ctxKey = "user_id"
+	userRoleKey ctxKey = "user_role"
+)
 
 // JWTMiddleware validates a Bearer token and injects user_id into request context.
 func JWTMiddleware(next http.Handler, jwtSecret string) http.Handler {
@@ -63,7 +66,13 @@ func JWTMiddleware(next http.Handler, jwtSecret string) http.Handler {
 			return
 		}
 
+		// Extract role from token claims
+		roleVal, _ := claims["role"]
+		role, _ := roleVal.(string)
+
+		// Inject both user_id and role into context
 		ctx := context.WithValue(r.Context(), userIDKey, uid)
+		ctx = context.WithValue(ctx, userRoleKey, role)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -76,4 +85,44 @@ func UserIDFromContext(ctx context.Context) (int64, bool) {
 	}
 	uid, ok := v.(int64)
 	return uid, ok
+}
+
+// UserRoleFromContext retrieves the user role stored by JWTMiddleware.
+func UserRoleFromContext(ctx context.Context) (string, bool) {
+	v := ctx.Value(userRoleKey)
+	if v == nil {
+		return "", false
+	}
+	role, ok := v.(string)
+	return role, ok
+}
+
+// RequireRole is a middleware that restricts access based on user role.
+// It must be used AFTER JWTMiddleware.
+func RequireRole(requiredRole string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Extract role from context (injected by JWTMiddleware)
+			role, ok := UserRoleFromContext(r.Context())
+			if !ok {
+				w.WriteHeader(http.StatusForbidden)
+				_ = json.NewEncoder(w).Encode(map[string]string{
+					"error": "No se pudo determinar el rol del usuario",
+				})
+				return
+			}
+
+			// Check if user has the required role
+			if role != requiredRole {
+				w.WriteHeader(http.StatusForbidden)
+				_ = json.NewEncoder(w).Encode(map[string]string{
+					"error": "No tienes permisos de " + requiredRole + " para esta acción",
+				})
+				return
+			}
+
+			// User has the required role, proceed
+			next.ServeHTTP(w, r)
+		})
+	}
 }

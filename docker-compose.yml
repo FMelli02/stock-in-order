@@ -45,9 +45,15 @@ services:
       PORT: ":8080"
       DB_DSN: "postgres://user:pass@postgres_db:5432/stock_db?sslmode=disable"
       JWT_SECRET: "dev-jwt-secret-change-me"
+      ENCRYPTION_KEY: "dev-encryption-key-change-me32"
       ENVIRONMENT: "development"
       SENTRY_DSN: "${SENTRY_DSN_BACKEND:-}"  # Optional: set via .env file
       RABBITMQ_URL: "amqp://user:pass@rabbitmq:5672/"
+      FRONTEND_URL: "http://localhost:5173"
+      # Mercado Libre OAuth2 (configurar con tus credenciales reales)
+      ML_CLIENT_ID: "${ML_CLIENT_ID:-your_mercadolibre_app_id}"
+      ML_CLIENT_SECRET: "${ML_CLIENT_SECRET:-your_mercadolibre_app_secret}"
+      ML_REDIRECT_URI: "${ML_REDIRECT_URI:-http://localhost:8080/api/v1/integrations/mercadolibre/callback}"
     depends_on:
       postgres_db:
         condition: service_healthy

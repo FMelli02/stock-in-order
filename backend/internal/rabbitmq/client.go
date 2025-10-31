@@ -110,3 +110,44 @@ func (c *Client) PublishReportRequest(ctx context.Context, req ReportRequest) er
 
 	return nil
 }
+
+// PublishMessage publica un mensaje genérico a una cola específica
+func (c *Client) PublishMessage(ctx context.Context, queueName string, body []byte) error {
+	// Declarar la cola si no existe
+	_, err := c.channel.QueueDeclare(
+		queueName, // name
+		true,      // durable
+		false,     // delete when unused
+		false,     // exclusive
+		false,     // no-wait
+		nil,       // arguments
+	)
+	if err != nil {
+		return fmt.Errorf("failed to declare queue %s: %w", queueName, err)
+	}
+
+	// Publicar el mensaje
+	err = c.channel.PublishWithContext(
+		ctx,
+		"",        // exchange (default)
+		queueName, // routing key (queue name)
+		false,     // mandatory
+		false,     // immediate
+		amqp.Publishing{
+			DeliveryMode: amqp.Persistent,
+			ContentType:  "application/json",
+			Body:         body,
+			Timestamp:    time.Now(),
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to publish message to queue %s: %w", queueName, err)
+	}
+
+	c.logger.Info("Mensaje publicado a RabbitMQ",
+		"queue", queueName,
+		"size", len(body),
+	)
+
+	return nil
+}

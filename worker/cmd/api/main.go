@@ -54,7 +54,7 @@ func main() {
 	// Iniciar consumidor en una goroutine
 	errChan := make(chan error, 1)
 	go func() {
-		if err := consumer.StartConsumer(cfg.RabbitMQ_URL, dbpool, emailClient); err != nil {
+		if err := consumer.StartConsumer(cfg.RabbitMQ_URL, dbpool, emailClient, cfg.EncryptionKey); err != nil {
 			errChan <- err
 		}
 	}()

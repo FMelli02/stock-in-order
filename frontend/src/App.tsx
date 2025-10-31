@@ -18,6 +18,8 @@ import SalesOrderDetailPage from './pages/SalesOrderDetailPage'
 import PurchaseOrderDetailPage from './pages/PurchaseOrderDetailPage'
 import AdminUsersPage from './pages/AdminUsersPage'
 import SentryTestPage from './pages/SentryTestPage'
+import IntegrationsPage from './pages/IntegrationsPage'
+import ScannerPage from './pages/ScannerPage'
 
 const router = createBrowserRouter([
   {
@@ -37,6 +39,8 @@ const router = createBrowserRouter([
           { path: 'purchase-orders', element: <PurchaseOrdersPage /> },
           { path: 'purchase-orders/new', element: <CreatePurchaseOrderPage /> },
           { path: 'purchase-orders/:id', element: <PurchaseOrderDetailPage /> },
+          { path: 'integrations', element: <IntegrationsPage /> }, // Integraciones (Mercado Libre, etc.)
+          { path: 'scanner', element: <ScannerPage /> }, // Scanner de código de barras
           { path: 'admin/users', element: <AdminUsersPage /> }, // Admin only
           { path: 'sentry-test', element: <SentryTestPage /> }, // Testing page
         ],

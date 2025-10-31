@@ -10,7 +10,10 @@ import (
 
 	"stock-in-order/worker/internal/alerts"
 	"stock-in-order/worker/internal/email"
+	"stock-in-order/worker/internal/melisales"
+	"stock-in-order/worker/internal/models"
 	"stock-in-order/worker/internal/reports"
+	"stock-in-order/worker/internal/services"
 )
 
 // ReportRequest representa la estructura del mensaje JSON que llega desde la cola
@@ -26,7 +29,7 @@ type StockAlertRequest struct {
 }
 
 // StartConsumer inicia el consumidor que escucha la cola de RabbitMQ
-func StartConsumer(rabbitURL string, db *pgxpool.Pool, emailClient *email.Client) error {
+func StartConsumer(rabbitURL string, db *pgxpool.Pool, emailClient *email.Client, encryptionKey string) error {
 	// Conectar a RabbitMQ
 	conn, err := amqp.Dial(rabbitURL)
 	if err != nil {
@@ -73,6 +76,22 @@ func StartConsumer(rabbitURL string, db *pgxpool.Pool, emailClient *email.Client
 
 	log.Printf("👁️  Worker escuchando cola de stock alerts: %s", qStockAlerts.Name)
 
+	// Declarar la cola de ventas de Mercado Libre
+	meliSalesQueue := "meli_sales_queue"
+	qMeliSales, err := ch.QueueDeclare(
+		meliSalesQueue, // name
+		true,           // durable
+		false,          // delete when unused
+		false,          // exclusive
+		false,          // no-wait
+		nil,            // arguments
+	)
+	if err != nil {
+		return fmt.Errorf("failed to declare meli sales queue: %w", err)
+	}
+
+	log.Printf("🛒 Worker escuchando cola de ventas de Mercado Libre: %s", qMeliSales.Name)
+
 	// Configurar QoS (prefetch): procesar 1 mensaje a la vez
 	err = ch.Qos(
 		1,     // prefetch count
@@ -109,6 +128,20 @@ func StartConsumer(rabbitURL string, db *pgxpool.Pool, emailClient *email.Client
 	)
 	if err != nil {
 		return fmt.Errorf("failed to register stock alerts consumer: %w", err)
+	}
+
+	// Registrar el consumidor de ventas de Mercado Libre
+	meliSalesMsgs, err := ch.Consume(
+		qMeliSales.Name, // queue
+		"",              // consumer
+		false,           // auto-ack
+		false,           // exclusive
+		false,           // no-local
+		false,           // no-wait
+		nil,             // args
+	)
+	if err != nil {
+		return fmt.Errorf("failed to register meli sales consumer: %w", err)
 	}
 
 	// Canal para mantener el proceso vivo
@@ -169,6 +202,28 @@ func StartConsumer(rabbitURL string, db *pgxpool.Pool, emailClient *email.Client
 
 			// Confirmar que el mensaje fue procesado exitosamente
 			log.Printf("✅ Chequeo de stock completado exitosamente")
+			d.Ack(false)
+		}
+	}()
+
+	// Goroutine que procesa ventas de Mercado Libre
+	go func() {
+		// Inicializar servicios necesarios
+		mlService := services.NewMercadoLibreService()
+		integrationModel := &models.IntegrationModel{DB: db}
+
+		for d := range meliSalesMsgs {
+			log.Printf("🛒 Mensaje recibido en cola de ventas de Mercado Libre: %s", d.Body)
+
+			// Procesar la venta
+			if err := melisales.ProcessSale(db, mlService, integrationModel, d.Body, encryptionKey); err != nil {
+				log.Printf("❌ Error al procesar venta de Mercado Libre: %v", err)
+				d.Nack(false, true) // Reencolar para reintentar
+				continue
+			}
+
+			// Confirmar que el mensaje fue procesado exitosamente
+			log.Printf("✅ Venta de Mercado Libre procesada exitosamente")
 			d.Ack(false)
 		}
 	}()

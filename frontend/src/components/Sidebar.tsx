@@ -46,6 +46,12 @@ export default function Sidebar() {
         <NavLink to="/purchase-orders" className={({ isActive }) => `${base} ${isActive ? active : ''}`}>
           Compras
         </NavLink>
+        <NavLink to="/integrations" className={({ isActive }) => `${base} ${isActive ? active : ''}`}>
+          🔗 Integraciones
+        </NavLink>
+        <NavLink to="/scanner" className={({ isActive }) => `${base} ${isActive ? active : ''}`}>
+          📷 Escanear Código
+        </NavLink>
         
         {/* Admin-only link */}
         {user?.role === 'admin' && (

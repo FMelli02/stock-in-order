@@ -86,7 +86,7 @@ func main() {
 	logger.Info("Conexión a RabbitMQ establecida")
 
 	// Initialize router with routes
-	r := router.SetupRouter(pool, rabbitClient, cfg.JWTSecret, logger)
+	r := router.SetupRouter(pool, rabbitClient, cfg, logger)
 
 	// Start HTTP server
 	srv := &http.Server{

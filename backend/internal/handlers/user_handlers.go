@@ -131,7 +131,8 @@ func LoginUser(db *pgxpool.Pool, jwtSecret string) http.HandlerFunc {
 		// Create JWT token
 		claims := jwt.MapClaims{
 			"user_id": user.ID,
-			"role":    user.Role, // Incluir el rol del usuario en el token
+			"email":   user.Email, // Incluir el email para auditoría
+			"role":    user.Role,  // Incluir el rol del usuario en el token
 			"exp":     jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
 			"iat":     jwt.NewNumericDate(time.Now()),
 		}

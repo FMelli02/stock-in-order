@@ -9,6 +9,7 @@ import (
 	"stock-in-order/backend/internal/config"
 	"stock-in-order/backend/internal/database"
 	"stock-in-order/backend/internal/rabbitmq"
+	"stock-in-order/backend/internal/repository"
 	"stock-in-order/backend/internal/router"
 
 	"github.com/getsentry/sentry-go"
@@ -70,23 +71,43 @@ func main() {
 	defer pool.Close()
 	logger.Info("Conexión a base de datos establecida")
 
-	// Connect to RabbitMQ
+	// Connect to RabbitMQ with retry logic
 	rabbitURL := os.Getenv("RABBITMQ_URL")
 	if rabbitURL == "" {
 		rabbitURL = "amqp://user:pass@localhost:5672/"
 	}
 
-	rabbitClient, err := rabbitmq.Connect(rabbitURL, logger)
-	if err != nil {
-		logger.Error("Error conectando a RabbitMQ", "error", err)
-		sentry.CaptureException(err)
-		os.Exit(1)
+	var rabbitClient *rabbitmq.Client
+	maxRetries := 10
+	retryDelay := 2 * time.Second
+
+	for i := 0; i < maxRetries; i++ {
+		rabbitClient, err = rabbitmq.Connect(rabbitURL, logger)
+		if err == nil {
+			logger.Info("Conexión a RabbitMQ establecida")
+			break
+		}
+
+		if i < maxRetries-1 {
+			logger.Warn("Error conectando a RabbitMQ, reintentando...",
+				"error", err,
+				"intento", i+1,
+				"max_intentos", maxRetries)
+			time.Sleep(retryDelay)
+		} else {
+			logger.Error("Error conectando a RabbitMQ después de múltiples intentos", "error", err)
+			sentry.CaptureException(err)
+			os.Exit(1)
+		}
 	}
 	defer rabbitClient.Close()
-	logger.Info("Conexión a RabbitMQ establecida")
+
+	// Initialize Audit Repository (El Libro de Actas)
+	auditRepo := repository.NewAuditRepository(pool)
+	logger.Info("Repositorio de auditoría inicializado")
 
 	// Initialize router with routes
-	r := router.SetupRouter(pool, rabbitClient, cfg, logger)
+	r := router.SetupRouter(pool, rabbitClient, auditRepo, cfg, logger)
 
 	// Start HTTP server
 	srv := &http.Server{

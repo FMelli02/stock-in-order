@@ -14,12 +14,37 @@ import (
 	"stock-in-order/backend/internal/middleware"
 	"stock-in-order/backend/internal/models"
 	"stock-in-order/backend/internal/rabbitmq"
+	"stock-in-order/backend/internal/repository"
 	"stock-in-order/backend/internal/services"
 )
 
-// SetupRouter wires up HTTP routes.
-func SetupRouter(db *pgxpool.Pool, rabbit *rabbitmq.Client, cfg config.Config, logger *slog.Logger) http.Handler {
+// Application holds dependencies for handlers
+type Application struct {
+	DB        *pgxpool.Pool
+	Rabbit    *rabbitmq.Client
+	AuditRepo *repository.AuditRepository
+	Config    config.Config
+	Logger    *slog.Logger
+}
+
+// SetupRouter wires up HTTP routes and receives the AuditRepository for handlers to use
+func SetupRouter(db *pgxpool.Pool, rabbit *rabbitmq.Client, auditRepo *repository.AuditRepository, cfg config.Config, logger *slog.Logger) http.Handler {
 	r := mux.NewRouter()
+
+	// Create Application struct with all dependencies (for future use)
+	_ = &Application{
+		DB:        db,
+		Rabbit:    rabbit,
+		AuditRepo: auditRepo,
+		Config:    cfg,
+		Logger:    logger,
+	}
+
+	// Create handlers App for audited handlers
+	handlersApp := &handlers.App{
+		DB:        db,
+		AuditRepo: auditRepo,
+	}
 
 	// API v1
 	api := r.PathPrefix("/api/v1").Subrouter()
@@ -28,11 +53,11 @@ func SetupRouter(db *pgxpool.Pool, rabbit *rabbitmq.Client, cfg config.Config, l
 	api.HandleFunc("/users/login", handlers.LoginUser(db, cfg.JWTSecret)).Methods("POST")
 
 	// ============================================
-	// ADMIN - Gestión de Usuarios
+	// ADMIN - Gestión de Usuarios con Auditoría
 	// ============================================
 	api.Handle("/admin/users",
 		middleware.JWTMiddleware(
-			middleware.RequireRole("admin")(http.HandlerFunc(handlers.CreateUserByAdmin(db))),
+			middleware.RequireRole("admin")(handlersApp.CreateUserByAdminV2()),
 			cfg.JWTSecret,
 		),
 	).Methods("POST")
@@ -53,7 +78,7 @@ func SetupRouter(db *pgxpool.Pool, rabbit *rabbitmq.Client, cfg config.Config, l
 	).Methods("GET")
 
 	// ============================================
-	// PRODUCTS - Con protección RBAC
+	// PRODUCTS - Con protección RBAC y Auditoría
 	// ============================================
 	// Lectura: Todos los autenticados (admin, vendedor, repositor)
 	api.Handle("/products",
@@ -63,31 +88,31 @@ func SetupRouter(db *pgxpool.Pool, rabbit *rabbitmq.Client, cfg config.Config, l
 	api.Handle("/products/{id:[0-9]+}/movements",
 		middleware.JWTMiddleware(http.HandlerFunc(handlers.GetProductMovements(db)), cfg.JWTSecret)).Methods("GET")
 
-	// Creación: Admin y Repositor
+	// Creación: Admin y Repositor (con auditoría)
 	api.Handle("/products",
 		middleware.JWTMiddleware(
-			middleware.RequireRole("admin")(http.HandlerFunc(handlers.CreateProduct(db))),
+			middleware.RequireRole("admin", "repositor")(handlersApp.CreateProductV2()),
 			cfg.JWTSecret,
 		)).Methods("POST")
 
-	// Actualización: Admin y Repositor
+	// Actualización: Admin y Repositor (con auditoría)
 	api.Handle("/products/{id:[0-9]+}",
 		middleware.JWTMiddleware(
-			middleware.RequireRole("admin")(http.HandlerFunc(handlers.UpdateProduct(db))),
+			middleware.RequireRole("admin", "repositor")(handlersApp.UpdateProductV2()),
 			cfg.JWTSecret,
 		)).Methods("PUT")
 
-	// Ajuste de Stock: Solo Repositor y Admin
+	// Ajuste de Stock: Admin y Repositor (con auditoría)
 	api.Handle("/products/{id:[0-9]+}/adjust-stock",
 		middleware.JWTMiddleware(
-			middleware.RequireRole("repositor")(http.HandlerFunc(handlers.AdjustProductStock(db))),
+			middleware.RequireRole("admin", "repositor")(handlersApp.AdjustProductStockV2()),
 			cfg.JWTSecret,
 		)).Methods("POST")
 
-	// Eliminación: Solo Admin
+	// Eliminación: Solo Admin (con auditoría)
 	api.Handle("/products/{id:[0-9]+}",
 		middleware.JWTMiddleware(
-			middleware.RequireRole("admin")(http.HandlerFunc(handlers.DeleteProduct(db))),
+			middleware.RequireRole("admin")(handlersApp.DeleteProductV2()),
 			cfg.JWTSecret,
 		)).Methods("DELETE")
 
@@ -123,7 +148,16 @@ func SetupRouter(db *pgxpool.Pool, rabbit *rabbitmq.Client, cfg config.Config, l
 		middleware.JWTMiddleware(http.HandlerFunc(handlers.ExportPurchaseOrdersXLSX(db)), cfg.JWTSecret)).Methods("GET")
 
 	// ============================================
-	// SUPPLIERS - Con protección RBAC
+	// ADMIN - Registro de Auditoría
+	// ============================================
+	api.Handle("/admin/audit-logs",
+		middleware.JWTMiddleware(
+			middleware.RequireRole("admin")(handlers.GetAuditLogs(db)),
+			cfg.JWTSecret,
+		)).Methods("GET")
+
+	// ============================================
+	// SUPPLIERS - Con protección RBAC y Auditoría
 	// ============================================
 	// Lectura: Todos los autenticados
 	api.Handle("/suppliers",
@@ -131,29 +165,29 @@ func SetupRouter(db *pgxpool.Pool, rabbit *rabbitmq.Client, cfg config.Config, l
 	api.Handle("/suppliers/{id:[0-9]+}",
 		middleware.JWTMiddleware(http.HandlerFunc(handlers.GetSupplier(db)), cfg.JWTSecret)).Methods("GET")
 
-	// Creación: Admin y Repositor
+	// Creación: Admin y Repositor (con auditoría)
 	api.Handle("/suppliers",
 		middleware.JWTMiddleware(
-			middleware.RequireRole("repositor")(http.HandlerFunc(handlers.CreateSupplier(db))),
+			middleware.RequireRole("admin", "repositor")(handlersApp.CreateSupplierV2()),
 			cfg.JWTSecret,
 		)).Methods("POST")
 
-	// Actualización: Admin y Repositor
+	// Actualización: Admin y Repositor (con auditoría)
 	api.Handle("/suppliers/{id:[0-9]+}",
 		middleware.JWTMiddleware(
-			middleware.RequireRole("repositor")(http.HandlerFunc(handlers.UpdateSupplier(db))),
+			middleware.RequireRole("admin", "repositor")(handlersApp.UpdateSupplierV2()),
 			cfg.JWTSecret,
 		)).Methods("PUT")
 
-	// Eliminación: Solo Admin
+	// Eliminación: Solo Admin (con auditoría)
 	api.Handle("/suppliers/{id:[0-9]+}",
 		middleware.JWTMiddleware(
-			middleware.RequireRole("admin")(http.HandlerFunc(handlers.DeleteSupplier(db))),
+			middleware.RequireRole("admin")(handlersApp.DeleteSupplierV2()),
 			cfg.JWTSecret,
 		)).Methods("DELETE")
 
 	// ============================================
-	// CUSTOMERS - Con protección RBAC
+	// CUSTOMERS - Con protección RBAC y Auditoría
 	// ============================================
 	// Lectura: Admin y Vendedor (repositor NO puede ver clientes)
 	api.Handle("/customers",
@@ -167,34 +201,34 @@ func SetupRouter(db *pgxpool.Pool, rabbit *rabbitmq.Client, cfg config.Config, l
 			cfg.JWTSecret,
 		)).Methods("GET")
 
-	// Creación: Admin y Vendedor
+	// Creación: Admin y Vendedor (con auditoría)
 	api.Handle("/customers",
 		middleware.JWTMiddleware(
-			middleware.RequireRole("vendedor")(http.HandlerFunc(handlers.CreateCustomer(db))),
+			middleware.RequireRole("vendedor")(handlersApp.CreateCustomerV2()),
 			cfg.JWTSecret,
 		)).Methods("POST")
 
-	// Actualización: Admin y Vendedor
+	// Actualización: Admin y Vendedor (con auditoría)
 	api.Handle("/customers/{id:[0-9]+}",
 		middleware.JWTMiddleware(
-			middleware.RequireRole("vendedor")(http.HandlerFunc(handlers.UpdateCustomer(db))),
+			middleware.RequireRole("vendedor")(handlersApp.UpdateCustomerV2()),
 			cfg.JWTSecret,
 		)).Methods("PUT")
 
-	// Eliminación: Solo Admin
+	// Eliminación: Solo Admin (con auditoría)
 	api.Handle("/customers/{id:[0-9]+}",
 		middleware.JWTMiddleware(
-			middleware.RequireRole("admin")(http.HandlerFunc(handlers.DeleteCustomer(db))),
+			middleware.RequireRole("admin")(handlersApp.DeleteCustomerV2()),
 			cfg.JWTSecret,
 		)).Methods("DELETE")
 
 	// ============================================
-	// SALES ORDERS - Con protección RBAC
+	// SALES ORDERS - Con protección RBAC y Auditoría
 	// ============================================
 	// Creación y Lectura: Admin y Vendedor
 	api.Handle("/sales-orders",
 		middleware.JWTMiddleware(
-			middleware.RequireRole("vendedor")(http.HandlerFunc(handlers.CreateSalesOrder(db))),
+			middleware.RequireRole("vendedor")(handlersApp.CreateSalesOrderV2()),
 			cfg.JWTSecret,
 		)).Methods("POST")
 	api.Handle("/sales-orders",
@@ -209,27 +243,25 @@ func SetupRouter(db *pgxpool.Pool, rabbit *rabbitmq.Client, cfg config.Config, l
 		)).Methods("GET")
 
 	// ============================================
-	// PURCHASE ORDERS - Con protección RBAC
+	// PURCHASE ORDERS - Con protección RBAC y Auditoría
 	// ============================================
-	// Creación y Gestión: Admin y Repositor
+	// Lectura: Todos los autenticados
+	api.Handle("/purchase-orders",
+		middleware.JWTMiddleware(http.HandlerFunc(handlers.GetPurchaseOrders(db)), cfg.JWTSecret)).Methods("GET")
+	api.Handle("/purchase-orders/{id:[0-9]+}",
+		middleware.JWTMiddleware(http.HandlerFunc(handlers.GetPurchaseOrderByID(db)), cfg.JWTSecret)).Methods("GET")
+
+	// Creación: Admin y Repositor (con auditoría)
 	api.Handle("/purchase-orders",
 		middleware.JWTMiddleware(
-			middleware.RequireRole("repositor")(http.HandlerFunc(handlers.CreatePurchaseOrder(db))),
+			middleware.RequireRole("admin", "repositor")(handlersApp.CreatePurchaseOrderV2()),
 			cfg.JWTSecret,
 		)).Methods("POST")
-	api.Handle("/purchase-orders",
-		middleware.JWTMiddleware(
-			middleware.RequireRole("repositor")(http.HandlerFunc(handlers.GetPurchaseOrders(db))),
-			cfg.JWTSecret,
-		)).Methods("GET")
-	api.Handle("/purchase-orders/{id:[0-9]+}",
-		middleware.JWTMiddleware(
-			middleware.RequireRole("repositor")(http.HandlerFunc(handlers.GetPurchaseOrderByID(db))),
-			cfg.JWTSecret,
-		)).Methods("GET")
+
+	// Actualización de estado: Admin y Repositor (con auditoría)
 	api.Handle("/purchase-orders/{id:[0-9]+}/status",
 		middleware.JWTMiddleware(
-			middleware.RequireRole("repositor")(http.HandlerFunc(handlers.UpdatePurchaseOrderStatus(db))),
+			middleware.RequireRole("admin", "repositor")(handlersApp.UpdatePurchaseOrderStatusV2()),
 			cfg.JWTSecret,
 		)).Methods("PUT")
 

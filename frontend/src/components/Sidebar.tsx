@@ -55,9 +55,14 @@ export default function Sidebar() {
         
         {/* Admin-only link */}
         {user?.role === 'admin' && (
-          <NavLink to="/admin/users" className={({ isActive }) => `${base} ${isActive ? active : ''}`}>
-            👥 Gestión de Usuarios
-          </NavLink>
+          <>
+            <NavLink to="/admin/users" className={({ isActive }) => `${base} ${isActive ? active : ''}`}>
+              👥 Gestión de Usuarios
+            </NavLink>
+            <NavLink to="/admin/audit-logs" className={({ isActive }) => `${base} ${isActive ? active : ''}`}>
+              📋 Registro de Auditoría
+            </NavLink>
+          </>
         )}
         
         <NavLink to="/login" className={({ isActive }) => `${base} ${isActive ? active : ''}`}>

@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"stock-in-order/backend/internal/middleware"
 	"stock-in-order/backend/internal/models"
 	"stock-in-order/backend/internal/services"
 )
@@ -37,7 +38,7 @@ func NewIntegrationHandlers(
 // GET /api/v1/integrations/mercadolibre/connect
 func (h *IntegrationHandlers) HandleMercadoLibreConnect(w http.ResponseWriter, r *http.Request) {
 	// Obtener el user_id del contexto (viene del middleware de autenticación)
-	userID, ok := r.Context().Value("user_id").(int64)
+	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
 		slog.Error("HandleMercadoLibreConnect: user_id not found in context")
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -150,7 +151,7 @@ func (h *IntegrationHandlers) HandleMercadoLibreCallback(w http.ResponseWriter, 
 // HandleListIntegrations devuelve todas las integraciones del usuario autenticado
 // GET /api/v1/integrations
 func (h *IntegrationHandlers) HandleListIntegrations(w http.ResponseWriter, r *http.Request) {
-	userID, ok := r.Context().Value("user_id").(int64)
+	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
@@ -195,7 +196,7 @@ func (h *IntegrationHandlers) HandleListIntegrations(w http.ResponseWriter, r *h
 // HandleDeleteIntegration elimina una integración específica
 // DELETE /api/v1/integrations/{platform}
 func (h *IntegrationHandlers) HandleDeleteIntegration(w http.ResponseWriter, r *http.Request) {
-	userID, ok := r.Context().Value("user_id").(int64)
+	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return

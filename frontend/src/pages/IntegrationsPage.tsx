@@ -77,8 +77,15 @@ export default function IntegrationsPage() {
   };
 
   const handleConnectMercadoLibre = () => {
-    // Redirigir al endpoint del backend que inicia el flujo OAuth
-    window.location.href = "http://localhost:8080/api/v1/integrations/mercadolibre/connect";
+    // Obtener el token del localStorage
+    const token = localStorage.getItem("token");
+    if (!token) {
+      toast.error("No estás autenticado");
+      return;
+    }
+    
+    // Redirigir al endpoint del backend que inicia el flujo OAuth, pasando el token
+    window.location.href = `http://localhost:8080/api/v1/integrations/mercadolibre/connect?token=${token}`;
   };
 
   const handleDeleteIntegration = async (platform: string, integrationId: number) => {

@@ -13,20 +13,30 @@ import (
 type ctxKey string
 
 const (
-	userIDKey   ctxKey = "user_id"
-	userRoleKey ctxKey = "user_role"
+	userIDKey    ctxKey = "user_id"
+	userEmailKey ctxKey = "user_email"
+	userRoleKey  ctxKey = "user_role"
 )
 
 // JWTMiddleware validates a Bearer token and injects user_id into request context.
+// It accepts the token from Authorization header or from 'token' query parameter.
 func JWTMiddleware(next http.Handler, jwtSecret string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var tokenStr string
+
+		// Try to get token from Authorization header first
 		auth := r.Header.Get("Authorization")
-		if auth == "" || !strings.HasPrefix(auth, "Bearer ") {
+		if auth != "" && strings.HasPrefix(auth, "Bearer ") {
+			tokenStr = strings.TrimPrefix(auth, "Bearer ")
+		} else {
+			// If not in header, try to get from query parameter
+			tokenStr = r.URL.Query().Get("token")
+		}
+
+		if tokenStr == "" {
 			http.Error(w, "missing or invalid Authorization header", http.StatusUnauthorized)
 			return
 		}
-
-		tokenStr := strings.TrimPrefix(auth, "Bearer ")
 
 		token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (any, error) {
 			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -70,8 +80,13 @@ func JWTMiddleware(next http.Handler, jwtSecret string) http.Handler {
 		roleVal, _ := claims["role"]
 		role, _ := roleVal.(string)
 
-		// Inject both user_id and role into context
+		// Extract email from token claims
+		emailVal, _ := claims["email"]
+		email, _ := emailVal.(string)
+
+		// Inject user_id, email, and role into context
 		ctx := context.WithValue(r.Context(), userIDKey, uid)
+		ctx = context.WithValue(ctx, userEmailKey, email)
 		ctx = context.WithValue(ctx, userRoleKey, role)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
@@ -97,9 +112,20 @@ func UserRoleFromContext(ctx context.Context) (string, bool) {
 	return role, ok
 }
 
+// UserEmailFromContext retrieves the user email stored by JWTMiddleware.
+func UserEmailFromContext(ctx context.Context) (string, bool) {
+	v := ctx.Value(userEmailKey)
+	if v == nil {
+		return "", false
+	}
+	email, ok := v.(string)
+	return email, ok
+}
+
 // RequireRole is a middleware that restricts access based on user role.
 // It must be used AFTER JWTMiddleware.
-func RequireRole(requiredRole string) func(http.Handler) http.Handler {
+// Accepts one or more roles. User needs to have ANY of the provided roles.
+func RequireRole(requiredRoles ...string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Extract role from context (injected by JWTMiddleware)
@@ -112,11 +138,19 @@ func RequireRole(requiredRole string) func(http.Handler) http.Handler {
 				return
 			}
 
-			// Check if user has the required role
-			if role != requiredRole {
+			// Check if user has ANY of the required roles
+			hasPermission := false
+			for _, requiredRole := range requiredRoles {
+				if role == requiredRole {
+					hasPermission = true
+					break
+				}
+			}
+
+			if !hasPermission {
 				w.WriteHeader(http.StatusForbidden)
 				_ = json.NewEncoder(w).Encode(map[string]string{
-					"error": "No tienes permisos de " + requiredRole + " para esta acción",
+					"error": "Acceso denegado: requiere rol " + joinRoles(requiredRoles),
 				})
 				return
 			}
@@ -125,4 +159,28 @@ func RequireRole(requiredRole string) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// joinRoles helper function to format roles for error message
+func joinRoles(roles []string) string {
+	if len(roles) == 0 {
+		return ""
+	}
+	if len(roles) == 1 {
+		return roles[0]
+	}
+	if len(roles) == 2 {
+		return roles[0] + " o " + roles[1]
+	}
+	result := ""
+	for i, role := range roles {
+		if i == len(roles)-1 {
+			result += " o " + role
+		} else if i > 0 {
+			result += ", " + role
+		} else {
+			result = role
+		}
+	}
+	return result
 }

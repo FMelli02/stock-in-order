@@ -16,7 +16,7 @@ type mockUserStore struct{}
 func (m *mockUserStore) Insert(u *models.User) error {
 	// Simulate DB side effects
 	u.ID = 1
-	u.CreatedAt = u.CreatedAt // leave zero or set later if needed
+	// CreatedAt will be set by the handler or DB
 	return nil
 }
 

@@ -17,6 +17,7 @@ import CreatePurchaseOrderPage from './pages/CreatePurchaseOrderPage'
 import SalesOrderDetailPage from './pages/SalesOrderDetailPage'
 import PurchaseOrderDetailPage from './pages/PurchaseOrderDetailPage'
 import AdminUsersPage from './pages/AdminUsersPage'
+import AdminAuditLogPage from './pages/AdminAuditLogPage'
 import SentryTestPage from './pages/SentryTestPage'
 import IntegrationsPage from './pages/IntegrationsPage'
 import ScannerPage from './pages/ScannerPage'
@@ -42,6 +43,7 @@ const router = createBrowserRouter([
           { path: 'integrations', element: <IntegrationsPage /> }, // Integraciones (Mercado Libre, etc.)
           { path: 'scanner', element: <ScannerPage /> }, // Scanner de código de barras
           { path: 'admin/users', element: <AdminUsersPage /> }, // Admin only
+          { path: 'admin/audit-logs', element: <AdminAuditLogPage /> }, // Admin only - Registro de Auditoría
           { path: 'sentry-test', element: <SentryTestPage /> }, // Testing page
         ],
       },

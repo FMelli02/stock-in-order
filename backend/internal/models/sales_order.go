@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -46,6 +47,120 @@ type SalesOrderModel struct {
 // ErrInsufficientStock is returned when available stock is not enough.
 var ErrInsufficientStock = errors.New("insufficient stock")
 
+// ConsumeStockFEFO implements First Expired First Out logic for stock consumption.
+// It deducts the requested quantity from product batches, prioritizing those that expire first.
+// This function MUST be called within a transaction.
+func ConsumeStockFEFO(ctx context.Context, tx pgx.Tx, productID int64, userID int64, quantityToConsume int) error {
+	slog.Info("ConsumeStockFEFO: starting FEFO consumption",
+		"productID", productID,
+		"userID", userID,
+		"quantityNeeded", quantityToConsume)
+
+	// Get batches ordered by expiry date (FEFO - First Expired, First Out)
+	// NULL expiry dates go last (NULLS LAST)
+	// If expiry dates are equal, use oldest batch first (created_at ASC)
+	// FOR UPDATE locks the rows for this transaction
+	const qBatches = `
+		SELECT id, quantity, expiry_date, lote_number
+		FROM product_batches
+		WHERE product_id = $1 AND user_id = $2 AND quantity > 0
+		ORDER BY expiry_date ASC NULLS LAST, created_at ASC
+		FOR UPDATE`
+
+	rows, err := tx.Query(ctx, qBatches, productID, userID)
+	if err != nil {
+		slog.Error("ConsumeStockFEFO: failed to query batches", "error", err)
+		return err
+	}
+	defer rows.Close()
+
+	type batch struct {
+		id         int64
+		quantity   int
+		expiryDate sql.NullTime
+		loteNumber string
+	}
+
+	var batches []batch
+	for rows.Next() {
+		var b batch
+		if err := rows.Scan(&b.id, &b.quantity, &b.expiryDate, &b.loteNumber); err != nil {
+			slog.Error("ConsumeStockFEFO: failed to scan batch", "error", err)
+			return err
+		}
+		batches = append(batches, b)
+	}
+	rows.Close()
+
+	if rows.Err() != nil {
+		slog.Error("ConsumeStockFEFO: rows error", "error", rows.Err())
+		return rows.Err()
+	}
+
+	slog.Info("ConsumeStockFEFO: found batches", "count", len(batches))
+
+	// Iterate through batches and consume stock
+	remaining := quantityToConsume
+	const updateBatch = `UPDATE product_batches SET quantity = $1 WHERE id = $2`
+
+	for _, b := range batches {
+		if remaining <= 0 {
+			break
+		}
+
+		expiryStr := "sin vencimiento"
+		if b.expiryDate.Valid {
+			expiryStr = b.expiryDate.Time.Format("2006-01-02")
+		}
+
+		slog.Info("ConsumeStockFEFO: processing batch",
+			"batchID", b.id,
+			"lote", b.loteNumber,
+			"available", b.quantity,
+			"needed", remaining,
+			"expiry", expiryStr)
+
+		if b.quantity >= remaining {
+			// This batch has enough stock to fulfill the remaining quantity
+			newQuantity := b.quantity - remaining
+			if _, err := tx.Exec(ctx, updateBatch, newQuantity, b.id); err != nil {
+				slog.Error("ConsumeStockFEFO: failed to update batch", "batchID", b.id, "error", err)
+				return err
+			}
+			slog.Info("ConsumeStockFEFO: consumed from batch",
+				"batchID", b.id,
+				"consumed", remaining,
+				"newQuantity", newQuantity)
+			remaining = 0
+			break
+		} else {
+			// This batch doesn't have enough, consume all of it
+			if _, err := tx.Exec(ctx, updateBatch, 0, b.id); err != nil {
+				slog.Error("ConsumeStockFEFO: failed to update batch", "batchID", b.id, "error", err)
+				return err
+			}
+			slog.Info("ConsumeStockFEFO: batch depleted",
+				"batchID", b.id,
+				"consumed", b.quantity)
+			remaining -= b.quantity
+		}
+	}
+
+	// If we still have remaining quantity, there's insufficient stock
+	if remaining > 0 {
+		slog.Error("ConsumeStockFEFO: insufficient stock",
+			"productID", productID,
+			"needed", quantityToConsume,
+			"missing", remaining)
+		return ErrInsufficientStock
+	}
+
+	slog.Info("ConsumeStockFEFO: stock consumed successfully",
+		"productID", productID,
+		"quantityConsumed", quantityToConsume)
+	return nil
+}
+
 // Create inserts a sales order with items and updates stock atomically.
 func (m *SalesOrderModel) Create(order *SalesOrder, items []OrderItem) error {
 	ctx := context.Background()
@@ -71,30 +186,35 @@ func (m *SalesOrderModel) Create(order *SalesOrder, items []OrderItem) error {
 		return err
 	}
 
-	// Insert items and update stock
+	// Insert items and consume stock using FEFO logic
 	const insertItem = `
 		INSERT INTO order_items (order_id, product_id, quantity, unit_price)
 		VALUES ($1, $2, $3, $4)
 		RETURNING id`
-	const updateStock = `
-		UPDATE products SET quantity = quantity - $1
-		WHERE id = $2 AND quantity - $1 >= 0`
 
 	for i := range items {
 		items[i].OrderID = order.ID
-		// Default price 0 for now
-		// Insert item
+
+		slog.Info("Create: processing order item",
+			"orderID", order.ID,
+			"productID", items[i].ProductID,
+			"quantity", items[i].Quantity)
+
+		// CRITICAL: Consume stock using FEFO logic BEFORE inserting the item
+		// This ensures we fail fast if there's insufficient stock
+		if err := ConsumeStockFEFO(ctx, tx, items[i].ProductID, order.UserID, items[i].Quantity); err != nil {
+			slog.Error("Create: failed to consume stock",
+				"productID", items[i].ProductID,
+				"quantity", items[i].Quantity,
+				"error", err)
+			return err
+		}
+
+		// Insert order item
 		if err := tx.QueryRow(ctx, insertItem, items[i].OrderID, items[i].ProductID, items[i].Quantity, items[i].UnitPrice).
 			Scan(&items[i].ID); err != nil {
+			slog.Error("Create: failed to insert order item", "error", err)
 			return err
-		}
-		// Update stock, ensure non-negative
-		tag, err := tx.Exec(ctx, updateStock, items[i].Quantity, items[i].ProductID)
-		if err != nil {
-			return err
-		}
-		if tag.RowsAffected() == 0 {
-			return ErrInsufficientStock
 		}
 
 		// Insert stock movement (negative for sales)
@@ -108,8 +228,13 @@ func (m *SalesOrderModel) Create(order *SalesOrder, items []OrderItem) error {
 			fmt.Sprintf("%d", order.ID),
 			order.UserID,
 		); err != nil {
+			slog.Error("Create: failed to insert stock movement", "error", err)
 			return err
 		}
+
+		slog.Info("Create: order item processed successfully",
+			"itemID", items[i].ID,
+			"productID", items[i].ProductID)
 	}
 
 	if err := tx.Commit(ctx); err != nil {

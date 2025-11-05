@@ -33,11 +33,13 @@ type PurchaseOrder struct {
 // PurchaseOrderItem represents a product item belonging to a purchase order.
 // Stock will be increased when items are received (handled elsewhere).
 type PurchaseOrderItem struct {
-	ID              int64   `json:"id"`
-	PurchaseOrderID int64   `json:"purchase_order_id"`
-	ProductID       int64   `json:"product_id"`
-	Quantity        int     `json:"quantity"`
-	UnitCost        float64 `json:"unit_cost"`
+	ID              int64      `json:"id"`
+	PurchaseOrderID int64      `json:"purchase_order_id"`
+	ProductID       int64      `json:"product_id"`
+	Quantity        int        `json:"quantity"`
+	UnitCost        float64    `json:"unit_cost"`
+	LoteNumber      string     `json:"lote_number,omitempty"` // Número de lote (opcional)
+	ExpiryDate      *time.Time `json:"expiry_date,omitempty"` // Fecha de vencimiento (opcional)
 }
 
 // PurchaseOrderModel wraps DB access for purchase orders.
@@ -72,13 +74,20 @@ func (m *PurchaseOrderModel) Create(order *PurchaseOrder, items []PurchaseOrderI
 	order.OrderDate = &orderDate
 
 	const insertItem = `
-		INSERT INTO purchase_order_items (purchase_order_id, product_id, quantity, unit_cost)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO purchase_order_items (purchase_order_id, product_id, quantity, unit_cost, lote_number, expiry_date)
+		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id`
 
 	for i := range items {
 		items[i].PurchaseOrderID = order.ID
-		if err := tx.QueryRow(ctx, insertItem, items[i].PurchaseOrderID, items[i].ProductID, items[i].Quantity, items[i].UnitCost).Scan(&items[i].ID); err != nil {
+		if err := tx.QueryRow(ctx, insertItem,
+			items[i].PurchaseOrderID,
+			items[i].ProductID,
+			items[i].Quantity,
+			items[i].UnitCost,
+			items[i].LoteNumber,
+			items[i].ExpiryDate,
+		).Scan(&items[i].ID); err != nil {
 			return err
 		}
 	}
@@ -214,7 +223,7 @@ func (m *PurchaseOrderModel) GetByID(orderID int64, userID int64) (*PurchaseOrde
 	}
 
 	const qItems = `
-		SELECT id, purchase_order_id, product_id, quantity, unit_cost
+		SELECT id, purchase_order_id, product_id, quantity, unit_cost, lote_number, expiry_date
 		FROM purchase_order_items
 		WHERE purchase_order_id = $1
 		ORDER BY id`
@@ -227,8 +236,16 @@ func (m *PurchaseOrderModel) GetByID(orderID int64, userID int64) (*PurchaseOrde
 	var items []PurchaseOrderItem
 	for rows.Next() {
 		var it PurchaseOrderItem
-		if err := rows.Scan(&it.ID, &it.PurchaseOrderID, &it.ProductID, &it.Quantity, &it.UnitCost); err != nil {
+		var loteNumber sql.NullString
+		var expiryDate sql.NullTime
+		if err := rows.Scan(&it.ID, &it.PurchaseOrderID, &it.ProductID, &it.Quantity, &it.UnitCost, &loteNumber, &expiryDate); err != nil {
 			return nil, nil, err
+		}
+		if loteNumber.Valid {
+			it.LoteNumber = loteNumber.String
+		}
+		if expiryDate.Valid {
+			it.ExpiryDate = &expiryDate.Time
 		}
 		items = append(items, it)
 	}
@@ -265,7 +282,7 @@ func (m *PurchaseOrderModel) UpdateStatus(orderID int64, userID int64, newStatus
 	if newStatus == "completed" && current != "completed" {
 		slog.Info("UpdateStatus: transitioning to completed", "orderID", orderID, "userID", userID)
 		const qItems = `
-			SELECT product_id, quantity
+			SELECT product_id, quantity, lote_number, expiry_date
 			FROM purchase_order_items
 			WHERE purchase_order_id = $1`
 		rows, err := tx.Query(ctx, qItems, orderID)
@@ -276,19 +293,20 @@ func (m *PurchaseOrderModel) UpdateStatus(orderID int64, userID int64, newStatus
 
 		// Read all items into a slice first (can't use tx while iterating rows)
 		type item struct {
-			productID int64
-			qty       int
+			productID  int64
+			qty        int
+			loteNumber sql.NullString
+			expiryDate sql.NullTime
 		}
 		var items []item
 		for rows.Next() {
-			var productID int64
-			var qty int
-			if err := rows.Scan(&productID, &qty); err != nil {
+			var it item
+			if err := rows.Scan(&it.productID, &it.qty, &it.loteNumber, &it.expiryDate); err != nil {
 				rows.Close()
 				slog.Error("UpdateStatus: failed to scan item", "error", err)
 				return err
 			}
-			items = append(items, item{productID: productID, qty: qty})
+			items = append(items, it)
 		}
 		rows.Close()
 
@@ -297,31 +315,47 @@ func (m *PurchaseOrderModel) UpdateStatus(orderID int64, userID int64, newStatus
 			return rows.Err()
 		}
 
-		// Now update products (tx is free now)
-		const incStock = `UPDATE products SET quantity = quantity + $1 WHERE id = $2 AND user_id = $3`
-		const resetNotified = `UPDATE products SET notificado = false WHERE id = $1 AND quantity > stock_minimo`
+		// Now create batch entries for each item (tx is free now)
+		const insertBatch = `
+			INSERT INTO product_batches (product_id, user_id, quantity, lote_number, expiry_date)
+			VALUES ($1, $2, $3, $4, $5)`
+		const resetNotified = `UPDATE products SET notificado = false WHERE id = $1`
+
 		for _, it := range items {
-			slog.Info("UpdateStatus: attempting to update product stock", "productID", it.productID, "qty", it.qty, "userID", userID)
-			result, err := tx.Exec(ctx, incStock, it.qty, it.productID, userID)
+			slog.Info("UpdateStatus: creating product batch",
+				"productID", it.productID,
+				"qty", it.qty,
+				"lote", it.loteNumber.String,
+				"expiry", it.expiryDate.Time,
+				"userID", userID)
+
+			// Prepare lote_number (use empty string if NULL)
+			loteNum := ""
+			if it.loteNumber.Valid {
+				loteNum = it.loteNumber.String
+			}
+
+			// Prepare expiry_date (use NULL if not provided)
+			var expiryDate interface{}
+			if it.expiryDate.Valid {
+				expiryDate = it.expiryDate.Time
+			} else {
+				expiryDate = nil
+			}
+
+			// Insert new batch
+			_, err := tx.Exec(ctx, insertBatch, it.productID, userID, it.qty, loteNum, expiryDate)
 			if err != nil {
-				slog.Error("UpdateStatus: failed to update product stock", "productID", it.productID, "error", err)
+				slog.Error("UpdateStatus: failed to create product batch", "productID", it.productID, "error", err)
 				return err
 			}
-			// Verify that the product was actually updated (exists and belongs to user)
-			if result.RowsAffected() == 0 {
-				slog.Error("UpdateStatus: product not updated", "productID", it.productID, "userID", userID)
-				return fmt.Errorf("product %d not found or does not belong to user %d", it.productID, userID)
-			}
-			slog.Info("UpdateStatus: product stock updated successfully", "productID", it.productID, "rowsAffected", result.RowsAffected())
+			slog.Info("UpdateStatus: product batch created successfully", "productID", it.productID)
 
-			// Reset notificado flag if stock is now above minimum
-			resetResult, err := tx.Exec(ctx, resetNotified, it.productID)
+			// Reset notificado flag (product now has stock from new batch)
+			_, err = tx.Exec(ctx, resetNotified, it.productID)
 			if err != nil {
 				slog.Error("UpdateStatus: failed to reset notificado flag", "productID", it.productID, "error", err)
 				return err
-			}
-			if resetResult.RowsAffected() > 0 {
-				slog.Info("UpdateStatus: notificado flag reset to false", "productID", it.productID)
 			}
 
 			// Insert stock movement (positive for purchase)

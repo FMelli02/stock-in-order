@@ -2,7 +2,9 @@ package models
 
 import (
 	"context"
+	"errors"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -69,8 +71,20 @@ func (m *DashboardModel) GetMetrics(userID int64) (DashboardMetrics, error) {
 		return DashboardMetrics{}, err
 	}
 	// ProductsLowStock (threshold fijo = 5)
-	if err := m.DB.QueryRow(ctx, `SELECT COUNT(*) FROM products WHERE user_id = $1 AND quantity <= 5`, userID).Scan(&metrics.ProductsLowStock); err != nil {
-		return DashboardMetrics{}, err
+	// Ahora calcula desde product_batches
+	if err := m.DB.QueryRow(ctx, `
+		SELECT COUNT(DISTINCT p.id)
+		FROM products p
+		LEFT JOIN product_batches pb ON p.id = pb.product_id
+		WHERE p.user_id = $1
+		GROUP BY p.id
+		HAVING COALESCE(SUM(pb.quantity), 0) <= 5
+	`, userID).Scan(&metrics.ProductsLowStock); err != nil {
+		// Si no hay productos con bajo stock, QueryRow retorna ErrNoRows
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return DashboardMetrics{}, err
+		}
+		metrics.ProductsLowStock = 0
 	}
 
 	return metrics, nil

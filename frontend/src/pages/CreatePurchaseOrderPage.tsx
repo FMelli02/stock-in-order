@@ -14,6 +14,8 @@ export default function CreatePurchaseOrderPage() {
   const [selectedProductId, setSelectedProductId] = useState<string>('')
   const [selectedQty, setSelectedQty] = useState<number>(1)
   const [selectedCost, setSelectedCost] = useState<number>(0)
+  const [selectedLote, setSelectedLote] = useState<string>('')
+  const [selectedExpiry, setSelectedExpiry] = useState<string>('')
   const [orderItems, setOrderItems] = useState<PurchaseOrderItemInput[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -65,14 +67,28 @@ export default function CreatePurchaseOrderPage() {
       const i = prev.findIndex((it) => it.productId === pid)
       if (i >= 0) {
         const copy = [...prev]
-        copy[i] = { ...copy[i], quantity: copy[i].quantity + selectedQty, unitCost: selectedCost }
+        copy[i] = { 
+          ...copy[i], 
+          quantity: copy[i].quantity + selectedQty, 
+          unitCost: selectedCost,
+          loteNumber: selectedLote || undefined,
+          expiryDate: selectedExpiry || undefined
+        }
         return copy
       }
-      return [...prev, { productId: pid, quantity: selectedQty, unitCost: selectedCost }]
+      return [...prev, { 
+        productId: pid, 
+        quantity: selectedQty, 
+        unitCost: selectedCost,
+        loteNumber: selectedLote || undefined,
+        expiryDate: selectedExpiry || undefined
+      }]
     })
     setSelectedProductId('')
     setSelectedQty(1)
     setSelectedCost(0)
+    setSelectedLote('')
+    setSelectedExpiry('')
   }
 
   const removeItem = (pid: number) => {
@@ -94,7 +110,13 @@ export default function CreatePurchaseOrderPage() {
       setError(null)
       const dto = {
         supplier_id: supplierIdNum,
-        items: orderItems.map((it) => ({ product_id: it.productId, quantity: it.quantity, unit_cost: it.unitCost })),
+        items: orderItems.map((it) => ({ 
+          product_id: it.productId, 
+          quantity: it.quantity, 
+          unit_cost: it.unitCost,
+          lote_number: it.loteNumber || '',
+          expiry_date: it.expiryDate || null
+        })),
       }
       await api.post('/purchase-orders', dto)
       toast.success('Orden de compra creada correctamente')
@@ -132,7 +154,7 @@ export default function CreatePurchaseOrderPage() {
           {/* Paso 2: Añadir Ítem */}
           <div className="bg-white rounded shadow p-4">
             <h2 className="font-semibold mb-2">Añadir Ítem</h2>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end mb-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700">Producto</label>
                 <select
@@ -165,6 +187,33 @@ export default function CreatePurchaseOrderPage() {
                   className="mt-1 block w-full rounded border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                   value={selectedCost}
                   onChange={(e) => setSelectedCost(Number(e.target.value))}
+                />
+              </div>
+            </div>
+            
+            {/* Campos opcionales de lote */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Número de Lote <span className="text-gray-500 text-xs">(opcional)</span>
+                </label>
+                <input
+                  type="text"
+                  className="mt-1 block w-full rounded border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  value={selectedLote}
+                  onChange={(e) => setSelectedLote(e.target.value)}
+                  placeholder="Ej: LOTE-2024-001"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Fecha de Vencimiento <span className="text-gray-500 text-xs">(opcional)</span>
+                </label>
+                <input
+                  type="date"
+                  className="mt-1 block w-full rounded border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  value={selectedExpiry}
+                  onChange={(e) => setSelectedExpiry(e.target.value)}
                 />
               </div>
               <div>

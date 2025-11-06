@@ -28,8 +28,19 @@ type UserModel struct {
 }
 
 // Insert stores a new user and sets its ID and CreatedAt fields.
+// También crea automáticamente una suscripción gratuita para el usuario.
 func (m *UserModel) Insert(user *User) error {
-	const q = `
+	ctx := context.Background()
+
+	// Iniciar transacción para crear usuario + suscripción atómicamente
+	tx, err := m.DB.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	// 1. Crear usuario
+	const qUser = `
 		INSERT INTO users (name, email, password_hash, role)
 		VALUES ($1, $2, $3, $4)
 		RETURNING id, created_at`
@@ -43,7 +54,7 @@ func (m *UserModel) Insert(user *User) error {
 		role = "vendedor"
 	}
 
-	err := m.DB.QueryRow(context.Background(), q, user.Name, user.Email, user.PasswordHash, role).Scan(&id, &createdAt)
+	err = tx.QueryRow(ctx, qUser, user.Name, user.Email, user.PasswordHash, role).Scan(&id, &createdAt)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" { // unique_violation
@@ -55,6 +66,24 @@ func (m *UserModel) Insert(user *User) error {
 	user.ID = id
 	user.CreatedAt = createdAt
 	user.Role = role
+
+	// 2. Crear suscripción gratuita para el nuevo usuario
+	const qSubscription = `
+		INSERT INTO subscriptions (user_id, plan_id, status, current_period_start)
+		VALUES ($1, $2, $3, $4)
+	`
+
+	now := time.Now()
+	_, err = tx.Exec(ctx, qSubscription, id, PlanFree, SubscriptionStatusActive, now)
+	if err != nil {
+		return err
+	}
+
+	// 3. Commit de la transacción
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+
 	return nil
 }
 

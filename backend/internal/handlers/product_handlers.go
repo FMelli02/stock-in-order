@@ -26,7 +26,6 @@ func CreateProduct(db *pgxpool.Pool) http.HandlerFunc {
 			Name        string `json:"name"`
 			SKU         string `json:"sku"`
 			Description string `json:"description"`
-			Quantity    int    `json:"quantity"`
 			StockMinimo int    `json:"stock_minimo"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
@@ -45,7 +44,6 @@ func CreateProduct(db *pgxpool.Pool) http.HandlerFunc {
 			Name:        in.Name,
 			SKU:         in.SKU,
 			Description: &in.Description,
-			Quantity:    in.Quantity,
 			StockMinimo: in.StockMinimo,
 			UserID:      userID,
 		}
@@ -132,7 +130,6 @@ func UpdateProduct(db *pgxpool.Pool) http.HandlerFunc {
 			Name        string `json:"name"`
 			SKU         string `json:"sku"`
 			Description string `json:"description"`
-			Quantity    int    `json:"quantity"`
 			StockMinimo int    `json:"stock_minimo"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
@@ -151,7 +148,6 @@ func UpdateProduct(db *pgxpool.Pool) http.HandlerFunc {
 			Name:        in.Name,
 			SKU:         in.SKU,
 			Description: &in.Description,
-			Quantity:    in.Quantity,
 			StockMinimo: in.StockMinimo,
 		}
 

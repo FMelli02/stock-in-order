@@ -60,6 +60,22 @@ api.interceptors.response.use(
         window.location.href = '/login'
       }
     }
+
+    // Redirect to billing on 402 Payment Required
+    if (error?.response?.status === 402 && typeof window !== 'undefined') {
+      // Store the error data for display
+      const paymentError = {
+        message: error.response.data?.message || 'Suscripción requerida',
+        upgrade_url: error.response.data?.upgrade_url || '/billing',
+      }
+      sessionStorage.setItem('paymentRequired', JSON.stringify(paymentError))
+      
+      // Only redirect if not already on billing/pricing pages
+      if (!['/billing', '/pricing'].includes(window.location.pathname)) {
+        window.location.href = '/billing'
+      }
+    }
+
     return Promise.reject(error)
   }
 )

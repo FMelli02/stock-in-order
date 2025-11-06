@@ -72,7 +72,7 @@ func ExportProductsXLSX(db *pgxpool.Pool) http.HandlerFunc {
 			f.SetCellValue(sheetName, "B"+strconv.Itoa(row), product.Name)
 			f.SetCellValue(sheetName, "C"+strconv.Itoa(row), product.SKU)
 			f.SetCellValue(sheetName, "D"+strconv.Itoa(row), description)
-			f.SetCellValue(sheetName, "E"+strconv.Itoa(row), product.Quantity)
+			f.SetCellValue(sheetName, "E"+strconv.Itoa(row), product.CalculatedQuantity)
 			f.SetCellValue(sheetName, "F"+strconv.Itoa(row), product.CreatedAt.Format("2006-01-02 15:04:05"))
 		}
 

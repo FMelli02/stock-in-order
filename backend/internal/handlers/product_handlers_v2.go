@@ -39,7 +39,6 @@ func (app *App) CreateProductV2() http.HandlerFunc {
 			Name        string `json:"name"`
 			SKU         string `json:"sku"`
 			Description string `json:"description"`
-			Quantity    int    `json:"quantity"`
 			StockMinimo int    `json:"stock_minimo"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
@@ -58,7 +57,6 @@ func (app *App) CreateProductV2() http.HandlerFunc {
 			Name:        in.Name,
 			SKU:         in.SKU,
 			Description: &in.Description,
-			Quantity:    in.Quantity,
 			StockMinimo: in.StockMinimo,
 			UserID:      userID,
 		}
@@ -111,7 +109,6 @@ func (app *App) UpdateProductV2() http.HandlerFunc {
 			Name        string `json:"name"`
 			SKU         string `json:"sku"`
 			Description string `json:"description"`
-			Quantity    int    `json:"quantity"`
 			StockMinimo int    `json:"stock_minimo"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
@@ -130,7 +127,6 @@ func (app *App) UpdateProductV2() http.HandlerFunc {
 			Name:        in.Name,
 			SKU:         in.SKU,
 			Description: &in.Description,
-			Quantity:    in.Quantity,
 			StockMinimo: in.StockMinimo,
 		}
 

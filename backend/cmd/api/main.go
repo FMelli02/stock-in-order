@@ -8,6 +8,7 @@ import (
 
 	"stock-in-order/backend/internal/config"
 	"stock-in-order/backend/internal/database"
+	"stock-in-order/backend/internal/mercadopago"
 	"stock-in-order/backend/internal/rabbitmq"
 	"stock-in-order/backend/internal/repository"
 	"stock-in-order/backend/internal/router"
@@ -106,8 +107,19 @@ func main() {
 	auditRepo := repository.NewAuditRepository(pool)
 	logger.Info("Repositorio de auditoría inicializado")
 
+	// Initialize MercadoPago client
+	var mpClient *mercadopago.Client
+	mpClient, err = mercadopago.NewClient()
+	if err != nil {
+		logger.Warn("Error inicializando MercadoPago", "error", err)
+		// Crear cliente vacío para evitar nil pointer
+		mpClient = &mercadopago.Client{}
+	} else {
+		logger.Info("Cliente MercadoPago inicializado correctamente")
+	}
+
 	// Initialize router with routes
-	r := router.SetupRouter(pool, rabbitClient, auditRepo, cfg, logger)
+	r := router.SetupRouter(pool, rabbitClient, auditRepo, mpClient, cfg, logger)
 
 	// Start HTTP server
 	srv := &http.Server{

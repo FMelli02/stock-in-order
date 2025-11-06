@@ -53,6 +53,20 @@ export default function Sidebar() {
           📷 Escanear Código
         </NavLink>
         
+        {/* Divider */}
+        <div className="border-t border-gray-600 my-2"></div>
+        
+        {/* Subscription Links */}
+        <NavLink to="/billing" className={({ isActive }) => `${base} ${isActive ? active : ''}`}>
+          💳 Mi Suscripción
+        </NavLink>
+        <NavLink to="/pricing" className={({ isActive }) => `${base} ${isActive ? active : ''}`}>
+          💎 Ver Planes
+        </NavLink>
+        
+        {/* Divider */}
+        <div className="border-t border-gray-600 my-2"></div>
+        
         {/* Admin-only link */}
         {user?.role === 'admin' && (
           <>

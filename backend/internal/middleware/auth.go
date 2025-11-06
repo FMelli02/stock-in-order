@@ -3,10 +3,14 @@ package middleware
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strings"
 
 	jwt "github.com/golang-jwt/jwt/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"stock-in-order/backend/internal/models"
 )
 
 // Context keys for user data
@@ -183,4 +187,88 @@ func joinRoles(roles []string) string {
 		}
 	}
 	return result
+}
+
+// ============================================
+// PAYWALL MIDDLEWARE - "EL PATOVICA 2.0"
+// ============================================
+
+// RequireActiveSubscription middleware verifica que el usuario tenga una suscripción activa.
+// Debe usarse DESPUÉS de JWTMiddleware (requiere user_id en contexto).
+// Si la suscripción no está activa, responde con 402 Payment Required.
+func RequireActiveSubscription(db *pgxpool.Pool) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Extraer user_id del contexto (inyectado por JWTMiddleware)
+			userID, ok := UserIDFromContext(r.Context())
+			if !ok {
+				w.WriteHeader(http.StatusUnauthorized)
+				_ = json.NewEncoder(w).Encode(map[string]string{
+					"error": "Usuario no autenticado",
+				})
+				return
+			}
+
+			// Obtener suscripción del usuario
+			sm := &models.SubscriptionModel{DB: db}
+			subscription, err := sm.GetByUserID(userID)
+			if err != nil {
+				if err == models.ErrNotFound {
+					// Usuario sin suscripción → crear una gratuita automáticamente
+					slog.Warn("Usuario sin suscripción, se requiere crear una", "userID", userID)
+					w.WriteHeader(http.StatusPaymentRequired)
+					_ = json.NewEncoder(w).Encode(map[string]any{
+						"error":       "No tienes una suscripción activa",
+						"message":     "Para continuar usando la aplicación, necesitas una suscripción activa.",
+						"action":      "upgrade",
+						"upgrade_url": "/subscriptions/status",
+					})
+					return
+				}
+
+				// Error al consultar DB
+				slog.Error("Error obteniendo suscripción", "error", err, "userID", userID)
+				http.Error(w, "Error verificando suscripción", http.StatusInternalServerError)
+				return
+			}
+
+			// Verificar que la suscripción esté activa
+			if subscription.Status != models.SubscriptionStatusActive {
+				slog.Info("Acceso denegado: suscripción no activa",
+					"userID", userID,
+					"status", subscription.Status,
+					"plan", subscription.PlanID)
+
+				w.WriteHeader(http.StatusPaymentRequired)
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"error":       "Tu suscripción no está activa",
+					"message":     "Tu suscripción está " + string(subscription.Status) + ". Para continuar, reactiva tu suscripción.",
+					"status":      subscription.Status,
+					"plan":        subscription.PlanID,
+					"action":      "reactivate",
+					"upgrade_url": "/subscriptions/status",
+				})
+				return
+			}
+
+			// Suscripción activa → permitir acceso
+			slog.Debug("Suscripción activa verificada",
+				"userID", userID,
+				"plan", subscription.PlanID)
+
+			// Opcional: Inyectar plan_id en el contexto para uso posterior
+			ctx := context.WithValue(r.Context(), ctxKey("subscription"), subscription)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+// SubscriptionFromContext retrieves the subscription stored by RequireActiveSubscription
+func SubscriptionFromContext(ctx context.Context) (*models.Subscription, bool) {
+	v := ctx.Value(ctxKey("subscription"))
+	if v == nil {
+		return nil, false
+	}
+	sub, ok := v.(*models.Subscription)
+	return sub, ok
 }

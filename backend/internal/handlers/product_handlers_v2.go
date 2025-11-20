@@ -26,7 +26,7 @@ type App struct {
 // CreateProductV2 handles POST /api/v1/products with audit logging
 func (app *App) CreateProductV2() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -58,7 +58,7 @@ func (app *App) CreateProductV2() http.HandlerFunc {
 			SKU:         in.SKU,
 			Description: &in.Description,
 			StockMinimo: in.StockMinimo,
-			UserID:      userID,
+			UserID:      organizationID,
 		}
 
 		pm := &models.ProductModel{DB: app.DB}
@@ -74,7 +74,7 @@ func (app *App) CreateProductV2() http.HandlerFunc {
 
 		// 🔔 AUDITORÍA: Registrar creación de producto
 		app.AuditRepo.Log(&models.AuditLog{
-			UserID:     &userID,
+			UserID:     &organizationID,
 			UserEmail:  userEmail,
 			UserRole:   userRole,
 			Action:     models.ActionCreate,
@@ -93,7 +93,7 @@ func (app *App) CreateProductV2() http.HandlerFunc {
 // UpdateProductV2 handles PUT /api/v1/products/{id} with audit logging
 func (app *App) UpdateProductV2() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -131,7 +131,7 @@ func (app *App) UpdateProductV2() http.HandlerFunc {
 		}
 
 		pm := &models.ProductModel{DB: app.DB}
-		if err := pm.Update(id, userID, p); err != nil {
+		if err := pm.Update(id, organizationID, p); err != nil {
 			if err == models.ErrNotFound {
 				http.NotFound(w, r)
 				return
@@ -147,7 +147,7 @@ func (app *App) UpdateProductV2() http.HandlerFunc {
 
 		// 🔔 AUDITORÍA: Registrar actualización de producto
 		app.AuditRepo.Log(&models.AuditLog{
-			UserID:     &userID,
+			UserID:     &organizationID,
 			UserEmail:  userEmail,
 			UserRole:   userRole,
 			Action:     models.ActionUpdate,
@@ -164,7 +164,7 @@ func (app *App) UpdateProductV2() http.HandlerFunc {
 // DeleteProductV2 handles DELETE /api/v1/products/{id} with audit logging
 func (app *App) DeleteProductV2() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -178,7 +178,7 @@ func (app *App) DeleteProductV2() http.HandlerFunc {
 
 		// Obtener el producto antes de eliminarlo para guardar su nombre en el log
 		pm := &models.ProductModel{DB: app.DB}
-		product, err := pm.GetByID(id, userID)
+		product, err := pm.GetByID(id, organizationID)
 		if err != nil {
 			if err == models.ErrNotFound {
 				http.NotFound(w, r)
@@ -188,7 +188,7 @@ func (app *App) DeleteProductV2() http.HandlerFunc {
 			return
 		}
 
-		if err := pm.Delete(id, userID); err != nil {
+		if err := pm.Delete(id, organizationID); err != nil {
 			if err == models.ErrNotFound {
 				http.NotFound(w, r)
 				return
@@ -200,14 +200,14 @@ func (app *App) DeleteProductV2() http.HandlerFunc {
 				})
 				return
 			}
-			slog.Error("DeleteProduct failed", "error", err, "productID", id, "userID", userID)
+			slog.Error("DeleteProduct failed", "error", err, "productID", id, "userID", organizationID)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
 		// 🔔 AUDITORÍA: Registrar eliminación de producto
 		app.AuditRepo.Log(&models.AuditLog{
-			UserID:     &userID,
+			UserID:     &organizationID,
 			UserEmail:  userEmail,
 			UserRole:   userRole,
 			Action:     models.ActionDelete,
@@ -224,7 +224,7 @@ func (app *App) DeleteProductV2() http.HandlerFunc {
 // AdjustProductStockV2 handles POST /api/v1/products/{id}/adjust-stock with audit logging
 func (app *App) AdjustProductStockV2() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -255,7 +255,7 @@ func (app *App) AdjustProductStockV2() http.HandlerFunc {
 
 		// Obtener el producto para incluir su nombre en el log
 		pm := &models.ProductModel{DB: app.DB}
-		product, err := pm.GetByID(id, userID)
+		product, err := pm.GetByID(id, organizationID)
 		if err != nil {
 			if err == models.ErrNotFound {
 				http.NotFound(w, r)
@@ -265,7 +265,7 @@ func (app *App) AdjustProductStockV2() http.HandlerFunc {
 			return
 		}
 
-		if err := pm.AdjustStock(id, userID, in.QuantityChange, reason); err != nil {
+		if err := pm.AdjustStock(id, organizationID, in.QuantityChange, reason); err != nil {
 			if err == models.ErrNotFound {
 				http.NotFound(w, r)
 				return
@@ -277,7 +277,7 @@ func (app *App) AdjustProductStockV2() http.HandlerFunc {
 		// 🔔 AUDITORÍA: Registrar ajuste de stock
 		adjustAction := "ADJUST_STOCK"
 		app.AuditRepo.Log(&models.AuditLog{
-			UserID:     &userID,
+			UserID:     &organizationID,
 			UserEmail:  userEmail,
 			UserRole:   userRole,
 			Action:     adjustAction,
@@ -298,7 +298,7 @@ func (app *App) AdjustProductStockV2() http.HandlerFunc {
 // CreateCustomerV2 handles POST /api/v1/customers with audit logging
 func (app *App) CreateCustomerV2() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -323,7 +323,7 @@ func (app *App) CreateCustomerV2() http.HandlerFunc {
 			Email:   in.Email,
 			Phone:   in.Phone,
 			Address: in.Address,
-			UserID:  userID,
+			UserID:  organizationID,
 		}
 
 		cm := &models.CustomerModel{DB: app.DB}
@@ -334,7 +334,7 @@ func (app *App) CreateCustomerV2() http.HandlerFunc {
 
 		// 🔔 AUDITORÍA: Registrar creación de cliente
 		app.AuditRepo.Log(&models.AuditLog{
-			UserID:     &userID,
+			UserID:     &organizationID,
 			UserEmail:  userEmail,
 			UserRole:   userRole,
 			Action:     models.ActionCreate,
@@ -353,7 +353,7 @@ func (app *App) CreateCustomerV2() http.HandlerFunc {
 // UpdateCustomerV2 handles PUT /api/v1/customers/{id} with audit logging
 func (app *App) UpdateCustomerV2() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -384,7 +384,7 @@ func (app *App) UpdateCustomerV2() http.HandlerFunc {
 		}
 
 		cm := &models.CustomerModel{DB: app.DB}
-		if err := cm.Update(id, userID, c); err != nil {
+		if err := cm.Update(id, organizationID, c); err != nil {
 			if err == models.ErrNotFound {
 				http.NotFound(w, r)
 				return
@@ -395,7 +395,7 @@ func (app *App) UpdateCustomerV2() http.HandlerFunc {
 
 		// 🔔 AUDITORÍA: Registrar actualización de cliente
 		app.AuditRepo.Log(&models.AuditLog{
-			UserID:     &userID,
+			UserID:     &organizationID,
 			UserEmail:  userEmail,
 			UserRole:   userRole,
 			Action:     models.ActionUpdate,
@@ -412,7 +412,7 @@ func (app *App) UpdateCustomerV2() http.HandlerFunc {
 // DeleteCustomerV2 handles DELETE /api/v1/customers/{id} with audit logging
 func (app *App) DeleteCustomerV2() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -426,7 +426,7 @@ func (app *App) DeleteCustomerV2() http.HandlerFunc {
 
 		// Obtener el cliente antes de eliminarlo para guardar su nombre en el log
 		cm := &models.CustomerModel{DB: app.DB}
-		customer, err := cm.GetByID(id, userID)
+		customer, err := cm.GetByID(id, organizationID)
 		if err != nil {
 			if err == models.ErrNotFound {
 				http.NotFound(w, r)
@@ -436,7 +436,7 @@ func (app *App) DeleteCustomerV2() http.HandlerFunc {
 			return
 		}
 
-		if err := cm.Delete(id, userID); err != nil {
+		if err := cm.Delete(id, organizationID); err != nil {
 			if err == models.ErrNotFound {
 				http.NotFound(w, r)
 				return
@@ -448,14 +448,14 @@ func (app *App) DeleteCustomerV2() http.HandlerFunc {
 				})
 				return
 			}
-			slog.Error("DeleteCustomer failed", "error", err, "customerID", id, "userID", userID)
+			slog.Error("DeleteCustomer failed", "error", err, "customerID", id, "userID", organizationID)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
 		// 🔔 AUDITORÍA: Registrar eliminación de cliente
 		app.AuditRepo.Log(&models.AuditLog{
-			UserID:     &userID,
+			UserID:     &organizationID,
 			UserEmail:  userEmail,
 			UserRole:   userRole,
 			Action:     models.ActionDelete,
@@ -476,7 +476,7 @@ func (app *App) DeleteCustomerV2() http.HandlerFunc {
 // CreateSupplierV2 handles POST /api/v1/suppliers with audit logging
 func (app *App) CreateSupplierV2() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -503,7 +503,7 @@ func (app *App) CreateSupplierV2() http.HandlerFunc {
 			Email:         in.Email,
 			Phone:         in.Phone,
 			Address:       in.Address,
-			UserID:        userID,
+			UserID:        organizationID,
 		}
 
 		sm := &models.SupplierModel{DB: app.DB}
@@ -514,7 +514,7 @@ func (app *App) CreateSupplierV2() http.HandlerFunc {
 
 		// 🔔 AUDITORÍA: Registrar creación de proveedor
 		app.AuditRepo.Log(&models.AuditLog{
-			UserID:     &userID,
+			UserID:     &organizationID,
 			UserEmail:  userEmail,
 			UserRole:   userRole,
 			Action:     models.ActionCreate,
@@ -533,7 +533,7 @@ func (app *App) CreateSupplierV2() http.HandlerFunc {
 // UpdateSupplierV2 handles PUT /api/v1/suppliers/{id} with audit logging
 func (app *App) UpdateSupplierV2() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -566,7 +566,7 @@ func (app *App) UpdateSupplierV2() http.HandlerFunc {
 		}
 
 		sm := &models.SupplierModel{DB: app.DB}
-		if err := sm.Update(id, userID, s); err != nil {
+		if err := sm.Update(id, organizationID, s); err != nil {
 			if err == models.ErrNotFound {
 				http.NotFound(w, r)
 				return
@@ -577,7 +577,7 @@ func (app *App) UpdateSupplierV2() http.HandlerFunc {
 
 		// 🔔 AUDITORÍA: Registrar actualización de proveedor
 		app.AuditRepo.Log(&models.AuditLog{
-			UserID:     &userID,
+			UserID:     &organizationID,
 			UserEmail:  userEmail,
 			UserRole:   userRole,
 			Action:     models.ActionUpdate,
@@ -594,7 +594,7 @@ func (app *App) UpdateSupplierV2() http.HandlerFunc {
 // DeleteSupplierV2 handles DELETE /api/v1/suppliers/{id} with audit logging
 func (app *App) DeleteSupplierV2() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -608,7 +608,7 @@ func (app *App) DeleteSupplierV2() http.HandlerFunc {
 
 		// Obtener el proveedor antes de eliminarlo
 		sm := &models.SupplierModel{DB: app.DB}
-		supplier, err := sm.GetByID(id, userID)
+		supplier, err := sm.GetByID(id, organizationID)
 		if err != nil {
 			if err == models.ErrNotFound {
 				http.NotFound(w, r)
@@ -618,7 +618,7 @@ func (app *App) DeleteSupplierV2() http.HandlerFunc {
 			return
 		}
 
-		if err := sm.Delete(id, userID); err != nil {
+		if err := sm.Delete(id, organizationID); err != nil {
 			if err == models.ErrNotFound {
 				http.NotFound(w, r)
 				return
@@ -630,14 +630,14 @@ func (app *App) DeleteSupplierV2() http.HandlerFunc {
 				})
 				return
 			}
-			slog.Error("DeleteSupplier failed", "error", err, "supplierID", id, "userID", userID)
+			slog.Error("DeleteSupplier failed", "error", err, "supplierID", id, "userID", organizationID)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
 		// 🔔 AUDITORÍA: Registrar eliminación de proveedor
 		app.AuditRepo.Log(&models.AuditLog{
-			UserID:     &userID,
+			UserID:     &organizationID,
 			UserEmail:  userEmail,
 			UserRole:   userRole,
 			Action:     models.ActionDelete,
@@ -658,7 +658,7 @@ func (app *App) DeleteSupplierV2() http.HandlerFunc {
 // CreateSalesOrderV2 handles POST /api/v1/sales-orders with audit logging
 func (app *App) CreateSalesOrderV2() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -679,7 +679,7 @@ func (app *App) CreateSalesOrderV2() http.HandlerFunc {
 
 		// Build model structs
 		order := &models.SalesOrder{
-			UserID: userID,
+			UserID: organizationID,
 			Status: "pending",
 		}
 		if in.CustomerID > 0 {
@@ -713,7 +713,7 @@ func (app *App) CreateSalesOrderV2() http.HandlerFunc {
 
 		// 🔔 AUDITORÍA: Registrar creación de orden de venta
 		app.AuditRepo.Log(&models.AuditLog{
-			UserID:     &userID,
+			UserID:     &organizationID,
 			UserEmail:  userEmail,
 			UserRole:   userRole,
 			Action:     models.ActionCreate,
@@ -739,7 +739,7 @@ func (app *App) CreateSalesOrderV2() http.HandlerFunc {
 // CreatePurchaseOrderV2 handles POST /api/v1/purchase-orders with audit logging
 func (app *App) CreatePurchaseOrderV2() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -759,7 +759,7 @@ func (app *App) CreatePurchaseOrderV2() http.HandlerFunc {
 		}
 
 		order := &models.PurchaseOrder{
-			UserID: userID,
+			UserID: organizationID,
 			Status: "pending",
 		}
 		if in.SupplierID > 0 {
@@ -792,7 +792,7 @@ func (app *App) CreatePurchaseOrderV2() http.HandlerFunc {
 
 		// 🔔 AUDITORÍA: Registrar creación de orden de compra
 		app.AuditRepo.Log(&models.AuditLog{
-			UserID:     &userID,
+			UserID:     &organizationID,
 			UserEmail:  userEmail,
 			UserRole:   userRole,
 			Action:     models.ActionCreate,
@@ -818,7 +818,7 @@ func (app *App) UpdatePurchaseOrderStatusV2() http.HandlerFunc {
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -841,7 +841,7 @@ func (app *App) UpdatePurchaseOrderStatusV2() http.HandlerFunc {
 		}
 
 		pom := &models.PurchaseOrderModel{DB: app.DB}
-		if err := pom.UpdateStatus(id, userID, in.Status); err != nil {
+		if err := pom.UpdateStatus(id, organizationID, in.Status); err != nil {
 			if err == models.ErrNotFound {
 				http.NotFound(w, r)
 				return
@@ -852,7 +852,7 @@ func (app *App) UpdatePurchaseOrderStatusV2() http.HandlerFunc {
 
 		// 🔔 AUDITORÍA: Registrar cambio de estado de orden de compra
 		app.AuditRepo.Log(&models.AuditLog{
-			UserID:     &userID,
+			UserID:     &organizationID,
 			UserEmail:  userEmail,
 			UserRole:   userRole,
 			Action:     models.ActionUpdate,
@@ -874,7 +874,7 @@ func (app *App) UpdatePurchaseOrderStatusV2() http.HandlerFunc {
 func (app *App) CreateUserByAdminV2() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Obtener info del admin que está creando el usuario
-		adminID, ok := middleware.UserIDFromContext(r.Context())
+		adminID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return

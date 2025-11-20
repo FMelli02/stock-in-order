@@ -26,7 +26,7 @@ func NewMercadoLibreWebhookHandlers(rabbitClient *rabbitmq.Client) *MercadoLibre
 type MercadoLibreNotification struct {
 	ID            int64  `json:"_id"`
 	Resource      string `json:"resource"` // Ej: "/orders/123456789"
-	UserID        int64  `json:"user_id"`  // ID del usuario en Mercado Libre
+	organizationID        int64  `json:"user_id"`  // ID del usuario en Mercado Libre
 	Topic         string `json:"topic"`    // Ej: "orders_v2", "items", "questions"
 	ApplicationID int64  `json:"application_id"`
 	Attempts      int    `json:"attempts"`
@@ -59,7 +59,7 @@ func (h *MercadoLibreWebhookHandlers) HandleMercadoLibreWebhook(w http.ResponseW
 	slog.Info("HandleMercadoLibreWebhook: notification received",
 		"topic", notification.Topic,
 		"resource", notification.Resource,
-		"user_id", notification.UserID,
+		"user_id", notification.organizationID,
 		"notification_id", notification.ID)
 
 	// Filtrar solo notificaciones de órdenes (ventas)

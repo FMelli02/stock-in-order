@@ -16,7 +16,7 @@ import (
 // CreateSupplier handles POST /api/v1/suppliers
 func CreateSupplier(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -40,7 +40,7 @@ func CreateSupplier(db *pgxpool.Pool) http.HandlerFunc {
 			Email:         in.Email,
 			Phone:         in.Phone,
 			Address:       in.Address,
-			UserID:        userID,
+			UserID:        organizationID,
 		}
 
 		sm := &models.SupplierModel{DB: db}
@@ -58,14 +58,14 @@ func CreateSupplier(db *pgxpool.Pool) http.HandlerFunc {
 // ListSuppliers handles GET /api/v1/suppliers
 func ListSuppliers(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 
 		sm := &models.SupplierModel{DB: db}
-		items, err := sm.GetAllForUser(userID)
+		items, err := sm.GetAllForUser(organizationID)
 		if err != nil {
 			http.Error(w, "could not fetch suppliers", http.StatusInternalServerError)
 			return
@@ -78,7 +78,7 @@ func ListSuppliers(db *pgxpool.Pool) http.HandlerFunc {
 // GetSupplier handles GET /api/v1/suppliers/{id}
 func GetSupplier(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -88,7 +88,7 @@ func GetSupplier(db *pgxpool.Pool) http.HandlerFunc {
 		id, _ := strconv.ParseInt(vars["id"], 10, 64)
 
 		sm := &models.SupplierModel{DB: db}
-		s, err := sm.GetByID(id, userID)
+		s, err := sm.GetByID(id, organizationID)
 		if err != nil {
 			if err == models.ErrNotFound {
 				http.NotFound(w, r)
@@ -106,7 +106,7 @@ func GetSupplier(db *pgxpool.Pool) http.HandlerFunc {
 // UpdateSupplier handles PUT /api/v1/suppliers/{id}
 func UpdateSupplier(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -136,7 +136,7 @@ func UpdateSupplier(db *pgxpool.Pool) http.HandlerFunc {
 		}
 
 		sm := &models.SupplierModel{DB: db}
-		if err := sm.Update(id, userID, s); err != nil {
+		if err := sm.Update(id, organizationID, s); err != nil {
 			if err == models.ErrNotFound {
 				http.NotFound(w, r)
 				return
@@ -152,7 +152,7 @@ func UpdateSupplier(db *pgxpool.Pool) http.HandlerFunc {
 // DeleteSupplier handles DELETE /api/v1/suppliers/{id}
 func DeleteSupplier(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -162,7 +162,7 @@ func DeleteSupplier(db *pgxpool.Pool) http.HandlerFunc {
 		id, _ := strconv.ParseInt(vars["id"], 10, 64)
 
 		sm := &models.SupplierModel{DB: db}
-		if err := sm.Delete(id, userID); err != nil {
+		if err := sm.Delete(id, organizationID); err != nil {
 			if err == models.ErrNotFound {
 				http.NotFound(w, r)
 				return
@@ -174,7 +174,7 @@ func DeleteSupplier(db *pgxpool.Pool) http.HandlerFunc {
 				})
 				return
 			}
-			slog.Error("DeleteSupplier failed", "error", err, "supplierID", id, "userID", userID)
+			slog.Error("DeleteSupplier failed", "error", err, "supplierID", id, "organizationID", organizationID)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}

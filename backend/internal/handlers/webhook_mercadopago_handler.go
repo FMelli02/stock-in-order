@@ -30,7 +30,7 @@ type MercadoPagoWebhookNotification struct {
 	Type          string `json:"type"` // "payment", "subscription_preapproval", etc.
 	DateCreated   string `json:"date_created"`
 	ApplicationID int64  `json:"application_id"`
-	UserID        int64  `json:"user_id"`
+	organizationID        int64  `json:"user_id"`
 	Version       int    `json:"version"`
 	APIVersion    string `json:"api_version"`
 	Action        string `json:"action"` // "payment.created", "payment.updated", etc.
@@ -127,7 +127,7 @@ func handlePaymentNotification(db *pgxpool.Pool, mpClient *mercadopago.Client, n
 		"external_reference", payment.ExternalReference)
 
 	// Extraer user_id de metadata o external_reference
-	userID, planID, err := extractUserAndPlanFromPayment(payment)
+	organizationID, planID, err := extractUserAndPlanFromPayment(payment)
 	if err != nil {
 		slog.Error("Error extrayendo user_id del pago", "error", err, "paymentID", paymentID)
 		return
@@ -141,14 +141,14 @@ func handlePaymentNotification(db *pgxpool.Pool, mpClient *mercadopago.Client, n
 	case "approved":
 		// Pago aprobado: activar suscripción
 		slog.Info("Pago aprobado, activando suscripción",
-			"userID", userID,
+			"organizationID", organizationID,
 			"planID", planID,
 			"amount", payment.TransactionAmount)
 
 		// Obtener o crear suscripción
-		sub, err := sm.GetByUserID(userID)
+		sub, err := sm.GetByUserID(organizationID)
 		if err != nil && err != models.ErrNotFound {
-			slog.Error("Error obteniendo suscripción", "error", err, "userID", userID)
+			slog.Error("Error obteniendo suscripción", "error", err, "organizationID", organizationID)
 			return
 		}
 
@@ -156,13 +156,13 @@ func handlePaymentNotification(db *pgxpool.Pool, mpClient *mercadopago.Client, n
 		if sub == nil {
 			currentPeriodEnd := time.Now().AddDate(0, 1, 0) // +1 mes
 			sub = &models.Subscription{
-				UserID:           userID,
+				UserID: organizationID,
 				PlanID:           planID,
 				Status:           models.SubscriptionStatusActive,
 				CurrentPeriodEnd: &currentPeriodEnd,
 			}
 			if err := sm.Create(sub); err != nil {
-				slog.Error("Error creando suscripción", "error", err, "userID", userID)
+				slog.Error("Error creando suscripción", "error", err, "organizationID", organizationID)
 				return
 			}
 		} else {
@@ -189,7 +189,7 @@ func handlePaymentNotification(db *pgxpool.Pool, mpClient *mercadopago.Client, n
 		// Registrar en historial de pagos
 		paymentHistory := &models.PaymentHistory{
 			SubscriptionID: sub.ID,
-			UserID:         userID,
+			UserID: organizationID,
 			MPPaymentID:    paymentID,
 			MPStatus:       "approved",
 			MPStatusDetail: payment.StatusDetail,
@@ -204,23 +204,23 @@ func handlePaymentNotification(db *pgxpool.Pool, mpClient *mercadopago.Client, n
 		}
 
 		slog.Info("Suscripción activada exitosamente",
-			"userID", userID,
+			"organizationID", organizationID,
 			"planID", planID,
 			"subscriptionID", sub.ID)
 
 	case "rejected", "cancelled":
 		// Pago rechazado o cancelado
 		slog.Info("Pago rechazado/cancelado",
-			"userID", userID,
+			"organizationID", organizationID,
 			"status", payment.Status,
 			"status_detail", payment.StatusDetail)
 
 		// Registrar en historial
-		sub, _ := sm.GetByUserID(userID)
+		sub, _ := sm.GetByUserID(organizationID)
 		if sub != nil {
 			paymentHistory := &models.PaymentHistory{
 				SubscriptionID: sub.ID,
-				UserID:         userID,
+				UserID: organizationID,
 				MPPaymentID:    paymentID,
 				MPStatus:       payment.Status,
 				MPStatusDetail: payment.StatusDetail,
@@ -236,7 +236,7 @@ func handlePaymentNotification(db *pgxpool.Pool, mpClient *mercadopago.Client, n
 	case "pending", "in_process":
 		// Pago pendiente
 		slog.Info("Pago pendiente de procesamiento",
-			"userID", userID,
+			"organizationID", organizationID,
 			"status", payment.Status)
 		// Podríamos registrarlo en historial pero no activar
 
@@ -268,7 +268,7 @@ func handleSubscriptionNotification(db *pgxpool.Pool, mpClient *mercadopago.Clie
 
 	// Extraer user_id y plan_id de external_reference
 	// Formato esperado: "user_123_plan_plan_pro"
-	userID, planID, err := extractUserAndPlanFromReference(preapproval.ExternalReference)
+	organizationID, planID, err := extractUserAndPlanFromReference(preapproval.ExternalReference)
 	if err != nil {
 		slog.Error("Error extrayendo datos de external_reference", "error", err, "reference", preapproval.ExternalReference)
 		return
@@ -281,14 +281,14 @@ func handleSubscriptionNotification(db *pgxpool.Pool, mpClient *mercadopago.Clie
 	case "authorized", "active":
 		// Suscripción autorizada/activa
 		slog.Info("Suscripción autorizada, activando",
-			"userID", userID,
+			"organizationID", organizationID,
 			"planID", planID,
 			"preapprovalID", preapprovalID)
 
 		// Obtener o crear suscripción
-		sub, err := sm.GetByUserID(userID)
+		sub, err := sm.GetByUserID(organizationID)
 		if err != nil && err != models.ErrNotFound {
-			slog.Error("Error obteniendo suscripción", "error", err, "userID", userID)
+			slog.Error("Error obteniendo suscripción", "error", err, "organizationID", organizationID)
 			return
 		}
 
@@ -296,13 +296,13 @@ func handleSubscriptionNotification(db *pgxpool.Pool, mpClient *mercadopago.Clie
 			// Crear nueva suscripción
 			currentPeriodEnd := time.Now().AddDate(0, 1, 0)
 			sub = &models.Subscription{
-				UserID:           userID,
+				UserID: organizationID,
 				PlanID:           planID,
 				Status:           models.SubscriptionStatusActive,
 				CurrentPeriodEnd: &currentPeriodEnd,
 			}
 			if err := sm.Create(sub); err != nil {
-				slog.Error("Error creando suscripción", "error", err, "userID", userID)
+				slog.Error("Error creando suscripción", "error", err, "organizationID", organizationID)
 				return
 			}
 		} else {
@@ -323,19 +323,19 @@ func handleSubscriptionNotification(db *pgxpool.Pool, mpClient *mercadopago.Clie
 		}
 
 		slog.Info("Suscripción recurrente activada",
-			"userID", userID,
+			"organizationID", organizationID,
 			"planID", planID,
 			"subscriptionID", sub.ID)
 
 	case "cancelled", "paused":
 		// Suscripción cancelada o pausada
 		slog.Info("Suscripción cancelada/pausada",
-			"userID", userID,
+			"organizationID", organizationID,
 			"status", preapproval.Status)
 
-		sub, err := sm.GetByUserID(userID)
+		sub, err := sm.GetByUserID(organizationID)
 		if err != nil {
-			slog.Error("Error obteniendo suscripción para cancelar", "error", err, "userID", userID)
+			slog.Error("Error obteniendo suscripción para cancelar", "error", err, "organizationID", organizationID)
 			return
 		}
 
@@ -349,7 +349,7 @@ func handleSubscriptionNotification(db *pgxpool.Pool, mpClient *mercadopago.Clie
 			slog.Error("Error downgrading a plan free", "error", err)
 		}
 
-		slog.Info("Suscripción cancelada en DB", "userID", userID)
+		slog.Info("Suscripción cancelada en DB", "organizationID", organizationID)
 
 	default:
 		slog.Info("Estado de suscripción no manejado", "status", preapproval.Status)
@@ -438,7 +438,7 @@ func extractUserAndPlanFromReference(reference string) (int64, models.PlanID, er
 	}
 
 	// Extraer user_id
-	userID, err := strconv.ParseInt(parts[1], 10, 64)
+	organizationID, err := strconv.ParseInt(parts[1], 10, 64)
 	if err != nil {
 		return 0, "", fmt.Errorf("user_id inválido en reference: %s", reference)
 	}
@@ -451,7 +451,7 @@ func extractUserAndPlanFromReference(reference string) (int64, models.PlanID, er
 	}
 	planID := models.PlanID(reference[planIndex:])
 
-	return userID, planID, nil
+	return organizationID, planID, nil
 }
 
 // extractUserAndPlanFromPayment extrae user_id y plan_id de un payment
@@ -474,7 +474,7 @@ func extractUserAndPlanFromPayment(payment interface{}) (int64, models.PlanID, e
 	var paymentData struct {
 		ExternalReference string `json:"external_reference"`
 		Metadata          struct {
-			UserID string `json:"user_id"`
+			organizationID string `json:"user_id"`
 			PlanID string `json:"plan_id"`
 		} `json:"metadata"`
 	}
@@ -484,12 +484,12 @@ func extractUserAndPlanFromPayment(payment interface{}) (int64, models.PlanID, e
 	}
 
 	// Primero intentar desde metadata (más confiable)
-	if paymentData.Metadata.UserID != "" && paymentData.Metadata.PlanID != "" {
-		userID, err := strconv.ParseInt(paymentData.Metadata.UserID, 10, 64)
+	if paymentData.Metadata.organizationID != "" && paymentData.Metadata.PlanID != "" {
+		organizationID, err := strconv.ParseInt(paymentData.Metadata.organizationID, 10, 64)
 		if err != nil {
 			return 0, "", err
 		}
-		return userID, models.PlanID(paymentData.Metadata.PlanID), nil
+		return organizationID, models.PlanID(paymentData.Metadata.PlanID), nil
 	}
 
 	// Fallback: extraer de external_reference

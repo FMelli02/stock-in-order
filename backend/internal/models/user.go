@@ -11,12 +11,13 @@ import (
 
 // User represents a user record in the database.
 type User struct {
-	ID           int64     `json:"id"`
-	Name         string    `json:"name"`
-	Email        string    `json:"email"`
-	PasswordHash []byte    `json:"-"`
-	Role         string    `json:"role"` // admin, vendedor, repositor
-	CreatedAt    time.Time `json:"created_at"`
+	ID             int64     `json:"id"`
+	Name           string    `json:"name"`
+	Email          string    `json:"email"`
+	PasswordHash   []byte    `json:"-"`
+	Role           string    `json:"role"`            // admin, vendedor, repositor
+	OrganizationID int64     `json:"organization_id"` // ID de la organización a la que pertenece
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 // ErrDuplicateEmail is returned when inserting a user with an existing email.
@@ -41,8 +42,8 @@ func (m *UserModel) Insert(user *User) error {
 
 	// 1. Crear usuario
 	const qUser = `
-		INSERT INTO users (name, email, password_hash, role)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO users (name, email, password_hash, role, organization_id)
+		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id, created_at`
 
 	var id int64
@@ -54,7 +55,7 @@ func (m *UserModel) Insert(user *User) error {
 		role = "vendedor"
 	}
 
-	err = tx.QueryRow(ctx, qUser, user.Name, user.Email, user.PasswordHash, role).Scan(&id, &createdAt)
+	err = tx.QueryRow(ctx, qUser, user.Name, user.Email, user.PasswordHash, role, user.OrganizationID).Scan(&id, &createdAt)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" { // unique_violation
@@ -66,6 +67,16 @@ func (m *UserModel) Insert(user *User) error {
 	user.ID = id
 	user.CreatedAt = createdAt
 	user.Role = role
+
+	// Si es admin y no tiene organization_id, asignarse a sí mismo
+	if role == "admin" && user.OrganizationID == 0 {
+		const qUpdateOrg = `UPDATE users SET organization_id = $1 WHERE id = $1`
+		_, err = tx.Exec(ctx, qUpdateOrg, id)
+		if err != nil {
+			return err
+		}
+		user.OrganizationID = id
+	}
 
 	// 2. Crear suscripción gratuita para el nuevo usuario
 	const qSubscription = `
@@ -90,13 +101,13 @@ func (m *UserModel) Insert(user *User) error {
 // GetByEmail fetches a user by email.
 func (m *UserModel) GetByEmail(email string) (*User, error) {
 	const q = `
-		SELECT id, name, email, password_hash, role, created_at
+		SELECT id, name, email, password_hash, role, organization_id, created_at
 		FROM users
 		WHERE email = $1`
 
 	var u User
 	err := m.DB.QueryRow(context.Background(), q, email).Scan(
-		&u.ID, &u.Name, &u.Email, &u.PasswordHash, &u.Role, &u.CreatedAt,
+		&u.ID, &u.Name, &u.Email, &u.PasswordHash, &u.Role, &u.OrganizationID, &u.CreatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -107,13 +118,13 @@ func (m *UserModel) GetByEmail(email string) (*User, error) {
 // GetByID fetches a user by ID.
 func (m *UserModel) GetByID(id int64) (*User, error) {
 	const q = `
-		SELECT id, name, email, password_hash, role, created_at
+		SELECT id, name, email, password_hash, role, organization_id, created_at
 		FROM users
 		WHERE id = $1`
 
 	var u User
 	err := m.DB.QueryRow(context.Background(), q, id).Scan(
-		&u.ID, &u.Name, &u.Email, &u.PasswordHash, &u.Role, &u.CreatedAt,
+		&u.ID, &u.Name, &u.Email, &u.PasswordHash, &u.Role, &u.OrganizationID, &u.CreatedAt,
 	)
 	if err != nil {
 		return nil, err

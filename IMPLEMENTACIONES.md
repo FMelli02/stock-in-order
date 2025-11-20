@@ -1,7 +1,7 @@
 # 📚 Implementaciones y Tecnologías - Stock In Order
 
 **Proyecto:** Sistema de Gestión de Inventario con Trazabilidad de Lotes  
-**Última Actualización:** 5 de Noviembre, 2025  
+**Última Actualización:** 6 de Noviembre, 2025  
 **Estado:** En Producción ✅
 
 ---
@@ -799,11 +799,13 @@ slog.Info("ConsumeStockFEFO: processing batch",
 | **stock_movements** | Movimientos de stock | 10,000-1,000,000 |
 | **integrations** | Integraciones externas | 1-50 |
 | **audit_logs** | Logs de auditoría | 50,000-5,000,000 |
+| **subscriptions** | Suscripciones de pago | 1-1,000 | **[NUEVO]**
 
 ### **Relaciones Clave**
 
 ```
 users (1) ─── (N) products
+users (1) ─── (N) subscriptions       # [NUEVO]
 products (1) ─── (N) product_batches
 products (1) ─── (N) stock_movements
 
@@ -835,6 +837,7 @@ users (1) ─── (N) audit_logs
 | 000012 | `create_audit_logs_table` | Auditoría |
 | 000013 | `add_batch_tracking` | **Sistema de lotes** ⭐ |
 | 000014 | `add_batch_fields_to_purchase_items` | Campos de lote en compras ⭐ |
+| 000015 | `create_subscriptions_table` | **Tabla de suscripciones** ⭐ **[NUEVO]** |
 
 ---
 
@@ -1072,59 +1075,775 @@ services:
 
 ---
 
-## 🎯 Funcionalidades Destacadas
+### **13. Sistema de Suscripciones y Pagos**
 
-### **Top 10 Features**
+**Tecnologías:**
+- MercadoPago API (Payment Gateway)
+- PostgreSQL (persistencia)
+- Webhooks (notificaciones asíncronas)
+- Go (backend)
+- React (frontend)
+
+**Funcionalidades:**
+- ✅ Múltiples planes de suscripción (Básico, Pro, Enterprise)
+- ✅ Integración con MercadoPago (checkout y webhooks)
+- ✅ Gestión de estados (pending, active, cancelled, expired)
+- ✅ Renovación automática de suscripciones
+- ✅ Cancelación de suscripciones
+- ✅ Verificación de firma de webhooks (seguridad)
+- ✅ Límites por plan (productos, órdenes, features)
+
+**Endpoints de Suscripciones:**
+```
+POST   /api/v1/subscriptions/create-checkout  - Crear checkout de pago
+GET    /api/v1/subscriptions/status           - Ver suscripción actual
+POST   /api/v1/subscriptions/cancel           - Cancelar suscripción
+POST   /api/v1/webhooks/mercadopago           - Recibir notificaciones
+```
+
+**Modelo de Datos:**
+```go
+type Subscription struct {
+    ID              int64      `json:"id"`
+    UserID          int64      `json:"user_id"`
+    PlanType        string     `json:"plan_type"`        // basico, pro, enterprise
+    Status          string     `json:"status"`           // pending, active, cancelled, expired
+    MercadoPagoID   string     `json:"mercadopago_id"`   // ID del pago
+    StartDate       time.Time  `json:"start_date"`
+    EndDate         time.Time  `json:"end_date"`
+    AutoRenew       bool       `json:"auto_renew"`
+    CancelledAt     *time.Time `json:"cancelled_at,omitempty"`
+}
+
+type Plan struct {
+    ID              string                 `json:"id"`
+    Name            string                 `json:"name"`
+    Price           float64                `json:"price"`
+    Currency        string                 `json:"currency"`
+    BillingCycle    string                 `json:"billing_cycle"`  // monthly, yearly
+    Features        PlanFeatures           `json:"features"`
+}
+
+type PlanFeatures struct {
+    MaxProducts     int    `json:"max_products"`
+    MaxOrders       int    `json:"max_orders"`
+    Reports         bool   `json:"reports"`
+    APIAccess       bool   `json:"api_access"`
+    Integrations    bool   `json:"integrations"`
+    PrioritySupport bool   `json:"priority_support"`
+    CustomReports   bool   `json:"custom_reports"`
+    MultiUser       bool   `json:"multi_user"`
+}
+```
+
+**Planes Configurados:**
+
+| Plan | Precio | Productos | Órdenes/mes | API | Integraciones | Soporte |
+|------|--------|-----------|-------------|-----|---------------|---------|
+| **Básico** | $5,000 ARS | 200 | 100 | ❌ | ❌ | Email |
+| **Pro** | $15,000 ARS | 1,000 | 500 | ✅ | ✅ | Prioritario |
+| **Enterprise** | $40,000 ARS | ∞ | ∞ | ✅ | ✅ | Dedicado |
+
+**Flujo de Suscripción:**
+```
+1. Usuario selecciona plan en /pricing
+   ↓
+2. Frontend → POST /subscriptions/create-checkout
+   ↓
+3. Backend crea preferencia en MercadoPago
+   ↓
+4. Usuario redirigido a checkout de MercadoPago
+   ↓
+5. Usuario completa pago
+   ↓
+6. MercadoPago → POST /webhooks/mercadopago
+   ↓
+7. Backend verifica firma y actualiza subscription.status = 'active'
+   ↓
+8. Usuario tiene acceso completo según plan
+```
+
+**Webhooks de MercadoPago:**
+```go
+// Tipos de notificación soportados
+switch topic {
+    case "payment":
+        // Pago aprobado → activar suscripción
+        // Pago rechazado → mantener pending
+        // Pago cancelado → marcar cancelled
+    
+    case "merchant_order":
+        // Orden completada → verificar pago
+}
+
+// Verificación de seguridad
+func VerifyWebhookSignature(xSignature, xRequestID string, dataID string) bool {
+    expectedSignature := GenerateHMAC(dataID + xRequestID, secret)
+    return CompareSignatures(xSignature, expectedSignature)
+}
+```
+
+**Estados de Suscripción:**
+
+| Estado | Descripción | Acceso |
+|--------|-------------|--------|
+| **pending** | Pago iniciado, no completado | ❌ Limitado |
+| **active** | Pago confirmado, suscripción activa | ✅ Completo |
+| **cancelled** | Usuario canceló, válida hasta end_date | ✅ Hasta fin periodo |
+| **expired** | Periodo terminado sin renovación | ❌ Bloqueado |
+
+**Renovación Automática:**
+```go
+// Scheduler ejecuta diariamente
+func RenewSubscriptions() {
+    // 1. Buscar suscripciones próximas a vencer (auto_renew = true)
+    expiringSubscriptions := FindExpiringSubscriptions(3 días)
+    
+    // 2. Por cada suscripción:
+    for _, sub := range expiringSubscriptions {
+        // Crear nuevo pago en MercadoPago
+        payment := CreateRecurringPayment(sub.UserID, sub.PlanType)
+        
+        // Enviar email de renovación
+        SendRenewalEmail(sub.UserID, payment.CheckoutURL)
+    }
+}
+```
+
+---
+
+### **14. Middleware de Paywall (Patovica)**
+
+**Tecnología:** Middleware Go
+
+**Funcionalidades:**
+- ✅ Verificación de suscripción activa
+- ✅ Validación de límites por plan
+- ✅ Bloqueo automático en endpoints protegidos
+- ✅ Respuesta HTTP 402 Payment Required
+- ✅ Mensajes personalizados por límite
+
+**Implementación:**
+```go
+// Middleware principal
+func RequireActiveSubscription(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        userID := GetUserIDFromContext(r)
+        
+        // Obtener suscripción
+        subscription := GetActiveSubscription(userID)
+        
+        // Verificar si está activa
+        if subscription == nil || !IsActive(subscription) {
+            w.WriteHeader(http.StatusPaymentRequired) // 402
+            json.NewEncoder(w).Encode(map[string]interface{}{
+                "error": "Suscripción requerida",
+                "upgrade_url": "/pricing",
+            })
+            return
+        }
+        
+        // Agregar suscripción al contexto
+        ctx := context.WithValue(r.Context(), "subscription", subscription)
+        next.ServeHTTP(w, r.WithContext(ctx))
+    })
+}
+
+// Verificación de límites
+func CheckPlanLimits(resource string) Middleware {
+    return func(next http.Handler) http.Handler {
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            subscription := GetSubscriptionFromContext(r)
+            plan := GetPlanFeatures(subscription.PlanType)
+            
+            switch resource {
+            case "products":
+                count := CountUserProducts(subscription.UserID)
+                if count >= plan.MaxProducts {
+                    w.WriteHeader(http.StatusPaymentRequired)
+                    json.NewEncoder(w).Encode(map[string]interface{}{
+                        "error": fmt.Sprintf("Límite de %d productos alcanzado", plan.MaxProducts),
+                        "upgrade_url": "/pricing",
+                    })
+                    return
+                }
+            
+            case "orders":
+                count := CountMonthlyOrders(subscription.UserID)
+                if count >= plan.MaxOrders {
+                    w.WriteHeader(http.StatusPaymentRequired)
+                    json.NewEncoder(w).Encode(map[string]interface{}{
+                        "error": fmt.Sprintf("Límite de %d órdenes/mes alcanzado", plan.MaxOrders),
+                        "upgrade_url": "/pricing",
+                    })
+                    return
+                }
+            }
+            
+            next.ServeHTTP(w, r)
+        })
+    }
+}
+```
+
+**Rutas Protegidas (42 endpoints):**
+```go
+// Productos
+r.Post("/products", RequireActiveSubscription(CheckPlanLimits("products")(CreateProduct)))
+r.Put("/products/{id}", RequireActiveSubscription(UpdateProduct))
+
+// Órdenes
+r.Post("/sales-orders", RequireActiveSubscription(CheckPlanLimits("orders")(CreateSalesOrder)))
+r.Post("/purchase-orders", RequireActiveSubscription(CheckPlanLimits("orders")(CreatePurchaseOrder)))
+
+// Reportes (solo planes Pro y Enterprise)
+r.Get("/products/export", RequireActiveSubscription(RequirePlanFeature("reports")(ExportProducts)))
+
+// API Access (solo planes con api_access = true)
+r.Get("/api/v1/external/*", RequireActiveSubscription(RequirePlanFeature("api_access")(APIHandler)))
+
+// Integraciones
+r.Post("/integrations", RequireActiveSubscription(RequirePlanFeature("integrations")(CreateIntegration)))
+```
+
+**Respuestas del Paywall:**
+```json
+// Sin suscripción
+{
+  "error": "Necesitas una suscripción activa para acceder a esta función",
+  "upgrade_url": "/pricing"
+}
+
+// Límite alcanzado
+{
+  "error": "Límite de 200 productos alcanzado. Actualiza a plan Pro para 1,000 productos.",
+  "current_count": 200,
+  "plan_limit": 200,
+  "upgrade_url": "/pricing"
+}
+
+// Feature no disponible
+{
+  "error": "Esta función requiere plan Pro o superior",
+  "current_plan": "basico",
+  "required_plan": "pro",
+  "upgrade_url": "/pricing"
+}
+```
+
+---
+
+### **15. Frontend de Suscripciones (La Vidriera)**
+
+**Tecnologías:**
+- React 18
+- TypeScript
+- Tailwind CSS
+- React Router
+- Axios
+
+**Páginas Implementadas:**
+
+#### **PricingPage.tsx** (Página Pública)
+- ✅ 3 tarjetas de precios con diseño moderno
+- ✅ Plan "Pro" destacado como "Más Popular"
+- ✅ Lista de características por plan
+- ✅ Botones "Suscribirme" con integración a MercadoPago
+- ✅ Sección de FAQ
+- ✅ CTA para empresas
+- ✅ Responsive design (grid 3 columnas)
+- ✅ Iconos SVG inline personalizados
+
+**Componentes Clave:**
+```typescript
+const handleSubscribe = async (planId: string) => {
+    try {
+        setLoading(true);
+        
+        // Crear checkout en backend
+        const response = await api.post('/subscriptions/create-checkout', {
+            plan_type: planId,
+            billing_cycle: 'monthly'
+        });
+        
+        // Redirigir a MercadoPago
+        window.location.href = response.data.checkout_url;
+        
+    } catch (error) {
+        const apiError = error as { 
+            response?: { 
+                status?: number; 
+                data?: { error?: string } 
+            } 
+        };
+        
+        if (apiError.response?.status === 401) {
+            // No autenticado → redirigir a login
+            navigate('/login', { 
+                state: { from: '/pricing', planId } 
+            });
+        } else {
+            toast.error('Error al iniciar suscripción');
+        }
+    } finally {
+        setLoading(false);
+    }
+};
+```
+
+**Características Visuales:**
+```tsx
+// Plan destacado
+<div className={`
+    relative p-8 rounded-2xl shadow-xl
+    ${isPro ? 'border-4 border-indigo-600' : 'border border-gray-200'}
+    ${isPro ? 'scale-105 z-10' : ''}
+    hover:scale-105 transition-transform duration-300
+`}>
+    {isPro && (
+        <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+            <span className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-4 py-1 rounded-full text-sm font-semibold">
+                Más Popular
+            </span>
+        </div>
+    )}
+    
+    {/* Contenido del plan */}
+</div>
+```
+
+#### **BillingPage.tsx** (Página Protegida)
+- ✅ Dashboard de suscripción actual
+- ✅ Badge de estado (Activa/Cancelada/Expirada)
+- ✅ Información del plan (fechas, auto-renovación)
+- ✅ Lista de características incluidas
+- ✅ Botón "Actualizar Plan" → redirige a /pricing
+- ✅ Botón "Cancelar Suscripción" con confirmación
+- ✅ Vista placeholder si no hay suscripción
+- ✅ Toast de error 402 al ser redirigido
+- ✅ Sidebar con información de pago
+
+**Estado de Suscripción:**
+```typescript
+interface Subscription {
+    id: number;
+    user_id: number;
+    plan_type: string;
+    status: 'pending' | 'active' | 'cancelled' | 'expired';
+    mercadopago_id: string;
+    start_date: string;
+    end_date: string;
+    auto_renew: boolean;
+    cancelled_at?: string;
+    plan?: Plan;
+}
+
+const fetchSubscription = async () => {
+    try {
+        const response = await api.get('/subscriptions/status');
+        setSubscription(response.data);
+    } catch (error) {
+        // Manejar errores
+    }
+};
+
+const handleCancelSubscription = async () => {
+    if (!window.confirm('¿Estás seguro de cancelar tu suscripción?')) return;
+    
+    try {
+        await api.post('/subscriptions/cancel', {
+            subscription_id: subscription.id
+        });
+        
+        toast.success('Suscripción cancelada');
+        fetchSubscription(); // Recargar datos
+        
+    } catch (error) {
+        toast.error('Error al cancelar');
+    }
+};
+```
+
+**Badges de Estado:**
+```typescript
+const getStatusBadge = (status: string) => {
+    const badges = {
+        active: 'bg-green-100 text-green-800',
+        pending: 'bg-yellow-100 text-yellow-800',
+        cancelled: 'bg-orange-100 text-orange-800',
+        expired: 'bg-red-100 text-red-800'
+    };
+    
+    const labels = {
+        active: 'Activa',
+        pending: 'Pendiente',
+        cancelled: 'Cancelada',
+        expired: 'Expirada'
+    };
+    
+    return (
+        <span className={`px-3 py-1 rounded-full text-sm font-semibold ${badges[status]}`}>
+            {labels[status]}
+        </span>
+    );
+};
+```
+
+**Rutas Agregadas:**
+```typescript
+// App.tsx
+const router = createBrowserRouter([
+    {
+        path: '/',
+        element: <MainLayout />,
+        children: [
+            // Rutas públicas
+            { path: 'login', element: <LoginPage /> },
+            { path: 'register', element: <RegisterPage /> },
+            { path: 'pricing', element: <PricingPage /> }, // ✨ NUEVA
+            
+            // Rutas protegidas
+            {
+                element: <ProtectedRoute />,
+                children: [
+                    { path: 'dashboard', element: <DashboardPage /> },
+                    { path: 'products', element: <ProductsPage /> },
+                    { path: 'billing', element: <BillingPage /> }, // ✨ NUEVA
+                    // ... otras rutas
+                ]
+            }
+        ]
+    }
+]);
+```
+
+**Navegación en Sidebar:**
+```tsx
+// Sidebar.tsx
+<nav>
+    {/* Sección de Ventas */}
+    <NavLink to="/products">📦 Productos</NavLink>
+    <NavLink to="/sales-orders">🛒 Órdenes de Venta</NavLink>
+    
+    <div className="border-t border-gray-600 my-2"></div>
+    
+    {/* Sección de Suscripción */}
+    <NavLink to="/billing">💳 Mi Suscripción</NavLink>
+    <NavLink to="/pricing">💎 Ver Planes</NavLink>
+    
+    <div className="border-t border-gray-600 my-2"></div>
+    
+    {/* Otras secciones */}
+</nav>
+```
+
+**Interceptor 402 Payment Required:**
+```typescript
+// services/api.ts
+api.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        // Error 401: No autenticado
+        if (error.response?.status === 401) {
+            localStorage.removeItem('token');
+            window.location.href = '/login';
+        }
+        
+        // Error 402: Payment Required
+        if (error.response?.status === 402) {
+            const errorData = error.response.data;
+            
+            // Guardar mensaje en sessionStorage
+            sessionStorage.setItem('paymentRequired', JSON.stringify({
+                message: errorData.error || 'Suscripción requerida',
+                upgrade_url: errorData.upgrade_url || '/pricing'
+            }));
+            
+            // Redirigir a billing (evitar loops)
+            if (!window.location.pathname.includes('/billing') && 
+                !window.location.pathname.includes('/pricing')) {
+                window.location.href = '/billing';
+            }
+        }
+        
+        return Promise.reject(error);
+    }
+);
+```
+
+**Features Implementadas:**
+
+| Feature | PricingPage | BillingPage |
+|---------|-------------|-------------|
+| Ver planes disponibles | ✅ | ❌ |
+| Comparar características | ✅ | ❌ |
+| Iniciar suscripción | ✅ | ❌ |
+| Ver suscripción actual | ❌ | ✅ |
+| Cancelar suscripción | ❌ | ✅ |
+| Actualizar plan | ❌ | ✅ |
+| Badge de estado | ❌ | ✅ |
+| Auto-redirect en 402 | ✅ | ✅ |
+| Toast de errores | ✅ | ✅ |
+
+---
+
+### **16. Seguridad en Webhooks**
+
+**Tecnología:** HMAC-SHA256
+
+**Implementación:**
+```go
+// Verificar firma de MercadoPago
+func VerifyMercadoPagoSignature(xSignature, xRequestID, dataID string) bool {
+    secret := os.Getenv("MERCADOPAGO_WEBHOOK_SECRET")
+    
+    // Generar firma esperada
+    manifest := fmt.Sprintf("id:%s;request-id:%s", dataID, xRequestID)
+    expectedSignature := GenerateHMAC(manifest, secret)
+    
+    // Extraer firma del header (formato: "ts=123,v1=abc")
+    parts := strings.Split(xSignature, ",")
+    var receivedSignature string
+    for _, part := range parts {
+        if strings.HasPrefix(part, "v1=") {
+            receivedSignature = strings.TrimPrefix(part, "v1=")
+            break
+        }
+    }
+    
+    // Comparación segura (constant-time)
+    return hmac.Equal(
+        []byte(receivedSignature),
+        []byte(expectedSignature)
+    )
+}
+
+func GenerateHMAC(message, secret string) string {
+    h := hmac.New(sha256.New, []byte(secret))
+    h.Write([]byte(message))
+    return hex.EncodeToString(h.Sum(nil))
+}
+```
+
+**Validaciones de Seguridad:**
+```go
+// Handler de webhook
+func HandleMercadoPagoWebhook(w http.ResponseWriter, r *http.Request) {
+    // 1. Verificar método HTTP
+    if r.Method != http.MethodPost {
+        http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+        return
+    }
+    
+    // 2. Obtener headers de firma
+    xSignature := r.Header.Get("x-signature")
+    xRequestID := r.Header.Get("x-request-id")
+    
+    if xSignature == "" || xRequestID == "" {
+        http.Error(w, "Missing signature headers", http.StatusBadRequest)
+        return
+    }
+    
+    // 3. Leer body
+    body, err := io.ReadAll(r.Body)
+    if err != nil {
+        http.Error(w, "Cannot read body", http.StatusBadRequest)
+        return
+    }
+    
+    // 4. Parsear JSON
+    var payload WebhookPayload
+    if err := json.Unmarshal(body, &payload); err != nil {
+        http.Error(w, "Invalid JSON", http.StatusBadRequest)
+        return
+    }
+    
+    // 5. Verificar firma
+    if !VerifyMercadoPagoSignature(xSignature, xRequestID, payload.Data.ID) {
+        slog.Error("Invalid webhook signature", "request_id", xRequestID)
+        http.Error(w, "Invalid signature", http.StatusUnauthorized)
+        return
+    }
+    
+    // 6. Procesar webhook (idempotente)
+    ProcessWebhook(payload)
+    
+    // 7. Responder rápido (MercadoPago espera 200 en <2s)
+    w.WriteHeader(http.StatusOK)
+    json.NewEncoder(w).Encode(map[string]string{"status": "received"})
+}
+```
+
+**Prevención de Ataques:**
+- ✅ Verificación de firma HMAC
+- ✅ Validación de headers requeridos
+- ✅ Procesamiento idempotente (evita duplicados)
+- ✅ Timeout corto en respuesta
+- ✅ Logging de intentos fallidos
+- ✅ Rate limiting (preparado)
+
+---
+
+### **17. Base de Datos de Suscripciones**
+
+**Tablas Nuevas:**
+
+```sql
+-- Tabla de suscripciones
+CREATE TABLE subscriptions (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    plan_type TEXT NOT NULL CHECK (plan_type IN ('basico', 'pro', 'enterprise')),
+    status TEXT NOT NULL CHECK (status IN ('pending', 'active', 'cancelled', 'expired')),
+    mercadopago_id TEXT,
+    start_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    end_date TIMESTAMPTZ NOT NULL,
+    auto_renew BOOLEAN NOT NULL DEFAULT true,
+    cancelled_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Índices para performance
+CREATE INDEX idx_subscriptions_user_id ON subscriptions(user_id);
+CREATE INDEX idx_subscriptions_status ON subscriptions(status);
+CREATE INDEX idx_subscriptions_end_date ON subscriptions(end_date);
+CREATE INDEX idx_subscriptions_mercadopago_id ON subscriptions(mercadopago_id);
+
+-- Trigger para updated_at
+CREATE OR REPLACE FUNCTION update_subscriptions_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_update_subscriptions_updated_at
+    BEFORE UPDATE ON subscriptions
+    FOR EACH ROW
+    EXECUTE FUNCTION update_subscriptions_updated_at();
+
+-- Constraint: Solo una suscripción activa por usuario
+CREATE UNIQUE INDEX idx_one_active_subscription_per_user 
+ON subscriptions(user_id) 
+WHERE status = 'active';
+```
+
+**Consultas Optimizadas:**
+```sql
+-- Obtener suscripción activa de un usuario
+SELECT * FROM subscriptions
+WHERE user_id = $1 
+  AND status = 'active'
+  AND end_date > NOW()
+LIMIT 1;
+
+-- Buscar suscripciones próximas a vencer (renovación)
+SELECT * FROM subscriptions
+WHERE status = 'active'
+  AND auto_renew = true
+  AND end_date BETWEEN NOW() AND NOW() + INTERVAL '3 days';
+
+-- Expirar suscripciones vencidas (job diario)
+UPDATE subscriptions
+SET status = 'expired'
+WHERE status = 'active'
+  AND end_date < NOW();
+
+-- Estadísticas de suscripciones
+SELECT 
+    plan_type,
+    status,
+    COUNT(*) as total,
+    SUM(CASE WHEN auto_renew THEN 1 ELSE 0 END) as with_auto_renew
+FROM subscriptions
+GROUP BY plan_type, status;
+```
+
+---
+
+## 🎯 Funcionalidades Destacadas (Actualizado)
+
+### **Top 15 Features**
 
 1. **Sistema de Lotes con FEFO** ⭐⭐⭐
    - Minimiza pérdidas por vencimiento
    - Trazabilidad completa
    - Cumplimiento normativo
 
-2. **Autenticación JWT + RBAC**
+2. **Sistema de Suscripciones Multi-Plan** ⭐⭐⭐ **[NUEVO]**
+   - 3 planes configurables
+   - Integración MercadoPago
+   - Renovación automática
+   - Webhooks seguros
+
+3. **Paywall Middleware Inteligente** ⭐⭐⭐ **[NUEVO]**
+   - 42 endpoints protegidos
+   - Validación de límites por plan
+   - Respuestas 402 personalizadas
+   - Verificación de features
+
+4. **Frontend de Suscripciones** ⭐⭐ **[NUEVO]**
+   - Página de precios moderna
+   - Dashboard de facturación
+   - Auto-redirect en 402
+   - Gestión completa
+
+5. **Autenticación JWT + RBAC**
    - 3 roles configurables
    - Seguridad multicapa
    - Tokens con expiración
 
-3. **Transacciones ACID con Locks**
+6. **Transacciones ACID con Locks**
    - Previene stock negativo
    - Seguridad en concurrencia
    - FOR UPDATE locks
 
-4. **Auditoría Completa**
+7. **Webhooks Seguros** ⭐⭐ **[NUEVO]**
+   - Verificación HMAC-SHA256
+   - Procesamiento idempotente
+   - Respuesta rápida (<2s)
+
+8. **Auditoría Completa**
    - Log de todas las operaciones
    - Trazabilidad de cambios
    - IP tracking
 
-5. **Sistema de Notificaciones**
+9. **Sistema de Notificaciones**
    - Emails asíncronos
    - RabbitMQ queue
    - SendGrid integration
 
-6. **Reportes y Exportación**
-   - CSV on-demand
-   - Filtros avanzados
-   - Datos completos
+10. **Reportes y Exportación**
+    - CSV on-demand
+    - Filtros avanzados
+    - Datos completos
 
-7. **Dashboard con KPIs**
-   - Métricas en tiempo real
-   - Stock bajo automático
-   - Visualización clara
+11. **Dashboard con KPIs**
+    - Métricas en tiempo real
+    - Stock bajo automático
+    - Visualización clara
 
-8. **Multitenancy**
-   - Datos aislados por usuario
-   - Escalabilidad
-   - Sin contaminación
+12. **Multitenancy**
+    - Datos aislados por usuario
+    - Escalabilidad
+    - Sin contaminación
 
-9. **Logging Estructurado**
-   - JSON output
-   - Búsqueda fácil
-   - Debugging eficiente
+13. **Logging Estructurado**
+    - JSON output
+    - Búsqueda fácil
+    - Debugging eficiente
 
-10. **Encriptación de Datos Sensibles**
+14. **Encriptación de Datos Sensibles**
     - AES-256-GCM
     - API keys seguras
     - Credenciales protegidas
+
+15. **Límites por Plan Dinámicos** ⭐ **[NUEVO]**
+    - Productos máximos
+    - Órdenes mensuales
+    - Features condicionales
 
 ---
 
@@ -1139,9 +1858,14 @@ services:
 | **RESUMEN_LOTES_COMPLETO.md** | 10 | Diagramas y flujos |
 | **PROYECTO_LOTES_FINAL.md** | 20 | Resumen completo del proyecto |
 | **GUIA_PRUEBAS_FEFO.md** | 15 | Testing paso a paso |
-| **IMPLEMENTACIONES.md** | 25 | Este documento |
+| **TAREA_3.1_COMPLETADA.md** | 12 | Base de datos de suscripciones |
+| **TAREA_3.2_COMPLETADA.md** | 18 | Webhook de MercadoPago |
+| **TAREA_4_PATOVICA_COMPLETADA.md** | 20 | Middleware de Paywall |
+| **TAREA_5_VIDRIERA_COMPLETADA.md** | 25 | Frontend de suscripciones |
+| **RESUMEN_TAREA_5.md** | 8 | Resumen ejecutivo Tarea 5 |
+| **IMPLEMENTACIONES.md** | 30 | Este documento |
 
-**Total:** ~115 páginas de documentación técnica
+**Total:** ~193 páginas de documentación técnica
 
 ---
 
@@ -1254,8 +1978,8 @@ services:
 
 | Lenguaje | % Uso | Propósito |
 |----------|-------|-----------|
-| **Go** | 60% | Backend completo |
-| **TypeScript** | 25% | Frontend |
+| **Go** | 55% | Backend completo (API + Suscripciones + Worker) |
+| **TypeScript** | 30% | Frontend (Dashboard + Pricing + Billing) |
 | **SQL** | 10% | Base de datos |
 | **Bash** | 3% | Scripts |
 | **Markdown** | 2% | Documentación |
@@ -1263,12 +1987,12 @@ services:
 ### **Líneas de Código (Estimado)**
 
 ```
-Backend (Go):        ~5,000 líneas
-Frontend (TS/TSX):   ~3,000 líneas
-SQL Migrations:      ~1,000 líneas
-Documentación:       ~8,000 líneas
-──────────────────────────────────
-Total:               ~17,000 líneas
+Backend (Go):        ~7,500 líneas  (+2,500 suscripciones)
+Frontend (TS/TSX):   ~4,500 líneas  (+1,500 pricing/billing)
+SQL Migrations:      ~1,200 líneas  (+200 subscriptions)
+Documentación:       ~12,000 líneas (+4,000 nuevas tareas)
+──────────────────────────────────────────────────────────
+Total:               ~25,200 líneas (+8,200 nuevas)
 ```
 
 ### **Complejidad del Proyecto**
@@ -1286,15 +2010,23 @@ Total:               ~17,000 líneas
 ### **Técnicos**
 - ✅ Arquitectura de microservicios funcional
 - ✅ Sistema de lotes con FEFO implementado desde cero
+- ✅ **Sistema de Suscripciones Multi-Plan** **[NUEVO]**
+- ✅ **Integración con MercadoPago** (checkout + webhooks) **[NUEVO]**
+- ✅ **Paywall Middleware** (42 rutas protegidas) **[NUEVO]**
+- ✅ **Frontend de Pagos** (2 páginas nuevas) **[NUEVO]**
+- ✅ **Webhooks Seguros** con verificación HMAC **[NUEVO]**
 - ✅ Transacciones ACID con locks avanzados
 - ✅ Encriptación de datos sensibles
 - ✅ Logging estructurado completo
-- ✅ 14 migraciones de base de datos
+- ✅ 15 migraciones de base de datos
 - ✅ Multitenancy robusto
 - ✅ RBAC con 3 roles
 
 ### **De Negocio**
 - ✅ Trazabilidad completa de inventario
+- ✅ **Monetización con planes de suscripción** **[NUEVO]**
+- ✅ **Límites configurables por plan** **[NUEVO]**
+- ✅ **Pasarela de pagos integrada** **[NUEVO]**
 - ✅ Minimización de pérdidas por vencimiento
 - ✅ Cumplimiento de normativas sanitarias
 - ✅ Reportes exportables
@@ -1314,24 +2046,28 @@ Total:               ~17,000 líneas
 
 **Stock In Order** es un sistema de gestión de inventario de **nivel empresarial** que implementa:
 
-- ✅ **13 tecnologías** principales
-- ✅ **10 módulos funcionales** completos
-- ✅ **12 tablas** de base de datos optimizadas
-- ✅ **40+ endpoints** REST API
+- ✅ **15+ tecnologías** principales
+- ✅ **17 módulos funcionales** completos
+- ✅ **13 tablas** de base de datos optimizadas
+- ✅ **50+ endpoints** REST API
 - ✅ **3 servicios** backend (API, Worker, Scheduler)
+- ✅ **Sistema de Suscripciones** con MercadoPago
+- ✅ **Paywall Middleware** (42 rutas protegidas)
+- ✅ **Frontend de Pagos** (PricingPage + BillingPage)
+- ✅ **Webhooks Seguros** con HMAC-SHA256
 - ✅ **FEFO Algorithm** para rotación óptima
 - ✅ **RBAC** con autenticación JWT
 - ✅ **Auditoría** completa de operaciones
 - ✅ **Transacciones ACID** con locks
-- ✅ **Documentación** de 115+ páginas
+- ✅ **Documentación** de 193+ páginas
 
 El proyecto está **listo para producción** y preparado para escalar.
 
 ---
 
 **Autor:** Stock In Order Team  
-**Versión del Documento:** 1.0  
-**Fecha:** 5 de Noviembre, 2025  
+**Versión del Documento:** 2.0 *(Actualizado con Sistema de Suscripciones)*  
+**Fecha:** 6 de Noviembre, 2025  
 **Estado del Proyecto:** ✅ EN PRODUCCIÓN
 
 ---

@@ -27,7 +27,7 @@ type CreateOrderInput struct {
 // CreateSalesOrder handles POST /api/v1/sales-orders
 func CreateSalesOrder(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -45,7 +45,7 @@ func CreateSalesOrder(db *pgxpool.Pool) http.HandlerFunc {
 
 		// Build model structs
 		order := &models.SalesOrder{
-			UserID: userID,
+			UserID: organizationID,
 			Status: "pending",
 		}
 		if in.CustomerID > 0 {
@@ -89,14 +89,14 @@ func CreateSalesOrder(db *pgxpool.Pool) http.HandlerFunc {
 // GetSalesOrders handles GET /api/v1/sales-orders
 func GetSalesOrders(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 
 		som := &models.SalesOrderModel{DB: db}
-		orders, err := som.GetAllForUser(userID)
+		orders, err := som.GetAllForUser(organizationID)
 		if err != nil {
 			http.Error(w, "could not fetch orders", http.StatusInternalServerError)
 			return
@@ -109,7 +109,7 @@ func GetSalesOrders(db *pgxpool.Pool) http.HandlerFunc {
 // GetSalesOrderByID handles GET /api/v1/sales-orders/{id}
 func GetSalesOrderByID(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -119,7 +119,7 @@ func GetSalesOrderByID(db *pgxpool.Pool) http.HandlerFunc {
 		id, _ := strconv.ParseInt(vars["id"], 10, 64)
 
 		som := &models.SalesOrderModel{DB: db}
-		order, items, err := som.GetByID(id, userID)
+		order, items, err := som.GetByID(id, organizationID)
 		if err != nil {
 			if err == models.ErrNotFound {
 				http.NotFound(w, r)

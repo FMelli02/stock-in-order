@@ -55,7 +55,7 @@ type AvailablePlan struct {
 func CreateCheckoutHandler(db *pgxpool.Pool, mpClient *mercadopago.Client) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// 1. Obtener usuario del JWT
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -95,10 +95,10 @@ func CreateCheckoutHandler(db *pgxpool.Pool, mpClient *mercadopago.Client) http.
 
 		// 3. Verificar suscripción actual del usuario
 		sm := &models.SubscriptionModel{DB: db}
-		currentSub, err := sm.GetByUserID(userID)
+		currentSub, err := sm.GetByUserID(organizationID)
 		if err != nil {
 			if err != models.ErrNotFound {
-				slog.Error("Error getting subscription", "error", err, "userID", userID)
+				slog.Error("Error getting subscription", "error", err, "organizationID", organizationID)
 				http.Error(w, "error getting subscription", http.StatusInternalServerError)
 				return
 			}
@@ -115,14 +115,14 @@ func CreateCheckoutHandler(db *pgxpool.Pool, mpClient *mercadopago.Client) http.
 
 		// 4. Crear preferencia de pago en MercadoPago
 		mpRequest := mercadopago.CreatePreferenceRequest{
-			UserID:    userID,
+			UserID:    organizationID,
 			UserEmail: userEmail,
 			PlanID:    planID,
 		}
 
 		mpResponse, err := mpClient.CreatePreference(mpRequest)
 		if err != nil {
-			slog.Error("Error creating MercadoPago preference", "error", err, "userID", userID)
+			slog.Error("Error creating MercadoPago preference", "error", err, "organizationID", organizationID)
 			http.Error(w, "error creating payment link", http.StatusInternalServerError)
 			return
 		}
@@ -138,7 +138,7 @@ func CreateCheckoutHandler(db *pgxpool.Pool, mpClient *mercadopago.Client) http.
 		json.NewEncoder(w).Encode(response)
 
 		slog.Info("Checkout created",
-			"userID", userID,
+			"organizationID", organizationID,
 			"plan", planID,
 			"checkoutURL", mpResponse.CheckoutURL)
 	}
@@ -149,7 +149,7 @@ func CreateCheckoutHandler(db *pgxpool.Pool, mpClient *mercadopago.Client) http.
 func CreateRecurringSubscriptionHandler(db *pgxpool.Pool, mpClient *mercadopago.Client) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// 1. Obtener usuario del JWT
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -179,14 +179,14 @@ func CreateRecurringSubscriptionHandler(db *pgxpool.Pool, mpClient *mercadopago.
 
 		// 3. Crear suscripción recurrente en MercadoPago
 		mpRequest := mercadopago.CreateSubscriptionRequest{
-			UserID:    userID,
+			UserID:    organizationID,
 			UserEmail: userEmail,
 			PlanID:    planID,
 		}
 
 		mpResponse, err := mpClient.CreateSubscription(mpRequest)
 		if err != nil {
-			slog.Error("Error creating recurring subscription", "error", err, "userID", userID)
+			slog.Error("Error creating recurring subscription", "error", err, "organizationID", organizationID)
 			http.Error(w, "error creating subscription", http.StatusInternalServerError)
 			return
 		}
@@ -202,7 +202,7 @@ func CreateRecurringSubscriptionHandler(db *pgxpool.Pool, mpClient *mercadopago.
 		json.NewEncoder(w).Encode(response)
 
 		slog.Info("Recurring subscription created",
-			"userID", userID,
+			"organizationID", organizationID,
 			"plan", planID,
 			"preapprovalID", mpResponse.PreapprovalID)
 	}
@@ -213,7 +213,7 @@ func CreateRecurringSubscriptionHandler(db *pgxpool.Pool, mpClient *mercadopago.
 func GetSubscriptionStatusHandler(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Obtener usuario del JWT
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -221,13 +221,13 @@ func GetSubscriptionStatusHandler(db *pgxpool.Pool) http.HandlerFunc {
 
 		// Obtener suscripción
 		sm := &models.SubscriptionModel{DB: db}
-		sub, err := sm.GetByUserID(userID)
+		sub, err := sm.GetByUserID(organizationID)
 		if err != nil {
 			if err == models.ErrNotFound {
 				http.NotFound(w, r)
 				return
 			}
-			slog.Error("Error getting subscription", "error", err, "userID", userID)
+			slog.Error("Error getting subscription", "error", err, "organizationID", organizationID)
 			http.Error(w, "error getting subscription", http.StatusInternalServerError)
 			return
 		}
@@ -242,7 +242,7 @@ func GetSubscriptionStatusHandler(db *pgxpool.Pool) http.HandlerFunc {
 		}
 
 		response := SubscriptionStatusResponse{
-			UserID:           userID,
+			UserID:           organizationID,
 			PlanID:           string(sub.PlanID),
 			Status:           string(sub.Status),
 			CurrentPeriodEnd: periodEnd,
@@ -259,7 +259,7 @@ func GetSubscriptionStatusHandler(db *pgxpool.Pool) http.HandlerFunc {
 // Cancela la suscripción del usuario
 func CancelSubscriptionHandler(db *pgxpool.Pool, mpClient *mercadopago.Client) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -267,13 +267,13 @@ func CancelSubscriptionHandler(db *pgxpool.Pool, mpClient *mercadopago.Client) h
 
 		// Obtener suscripción actual
 		sm := &models.SubscriptionModel{DB: db}
-		sub, err := sm.GetByUserID(userID)
+		sub, err := sm.GetByUserID(organizationID)
 		if err != nil {
 			if err == models.ErrNotFound {
 				http.NotFound(w, r)
 				return
 			}
-			slog.Error("Error getting subscription", "error", err, "userID", userID)
+			slog.Error("Error getting subscription", "error", err, "organizationID", organizationID)
 			http.Error(w, "error getting subscription", http.StatusInternalServerError)
 			return
 		}
@@ -297,18 +297,18 @@ func CancelSubscriptionHandler(db *pgxpool.Pool, mpClient *mercadopago.Client) h
 
 		// Cancelar en nuestra base de datos
 		if err := sm.Cancel(sub.ID, "user_requested"); err != nil {
-			slog.Error("Error canceling subscription", "error", err, "userID", userID)
+			slog.Error("Error canceling subscription", "error", err, "organizationID", organizationID)
 			http.Error(w, "error canceling subscription", http.StatusInternalServerError)
 			return
 		}
 
 		// Downgrade a plan gratuito
 		if err := sm.UpdatePlan(sub.ID, models.PlanFree); err != nil {
-			slog.Error("Error downgrading to free plan", "error", err, "userID", userID)
+			slog.Error("Error downgrading to free plan", "error", err, "organizationID", organizationID)
 		}
 
 		w.WriteHeader(http.StatusNoContent)
-		slog.Info("Subscription canceled", "userID", userID, "plan", sub.PlanID)
+		slog.Info("Subscription canceled", "organizationID", organizationID, "plan", sub.PlanID)
 	}
 }
 

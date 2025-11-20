@@ -16,7 +16,7 @@ import (
 // CreateCustomer handles POST /api/v1/customers
 func CreateCustomer(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -38,7 +38,7 @@ func CreateCustomer(db *pgxpool.Pool) http.HandlerFunc {
 			Email:   in.Email,
 			Phone:   in.Phone,
 			Address: in.Address,
-			UserID:  userID,
+			UserID:  organizationID,
 		}
 
 		cm := &models.CustomerModel{DB: db}
@@ -56,14 +56,14 @@ func CreateCustomer(db *pgxpool.Pool) http.HandlerFunc {
 // ListCustomers handles GET /api/v1/customers
 func ListCustomers(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 
 		cm := &models.CustomerModel{DB: db}
-		items, err := cm.GetAllForUser(userID)
+		items, err := cm.GetAllForUser(organizationID)
 		if err != nil {
 			http.Error(w, "could not fetch customers", http.StatusInternalServerError)
 			return
@@ -76,7 +76,7 @@ func ListCustomers(db *pgxpool.Pool) http.HandlerFunc {
 // GetCustomer handles GET /api/v1/customers/{id}
 func GetCustomer(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -86,7 +86,7 @@ func GetCustomer(db *pgxpool.Pool) http.HandlerFunc {
 		id, _ := strconv.ParseInt(vars["id"], 10, 64)
 
 		cm := &models.CustomerModel{DB: db}
-		c, err := cm.GetByID(id, userID)
+		c, err := cm.GetByID(id, organizationID)
 		if err != nil {
 			if err == models.ErrNotFound {
 				http.NotFound(w, r)
@@ -104,7 +104,7 @@ func GetCustomer(db *pgxpool.Pool) http.HandlerFunc {
 // UpdateCustomer handles PUT /api/v1/customers/{id}
 func UpdateCustomer(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -132,7 +132,7 @@ func UpdateCustomer(db *pgxpool.Pool) http.HandlerFunc {
 		}
 
 		cm := &models.CustomerModel{DB: db}
-		if err := cm.Update(id, userID, c); err != nil {
+		if err := cm.Update(id, organizationID, c); err != nil {
 			if err == models.ErrNotFound {
 				http.NotFound(w, r)
 				return
@@ -148,7 +148,7 @@ func UpdateCustomer(db *pgxpool.Pool) http.HandlerFunc {
 // DeleteCustomer handles DELETE /api/v1/customers/{id}
 func DeleteCustomer(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -158,7 +158,7 @@ func DeleteCustomer(db *pgxpool.Pool) http.HandlerFunc {
 		id, _ := strconv.ParseInt(vars["id"], 10, 64)
 
 		cm := &models.CustomerModel{DB: db}
-		if err := cm.Delete(id, userID); err != nil {
+		if err := cm.Delete(id, organizationID); err != nil {
 			if err == models.ErrNotFound {
 				http.NotFound(w, r)
 				return
@@ -170,7 +170,7 @@ func DeleteCustomer(db *pgxpool.Pool) http.HandlerFunc {
 				})
 				return
 			}
-			slog.Error("DeleteCustomer failed", "error", err, "customerID", id, "userID", userID)
+			slog.Error("DeleteCustomer failed", "error", err, "customerID", id, "organizationID", organizationID)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}

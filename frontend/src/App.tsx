@@ -23,6 +23,7 @@ import IntegrationsPage from './pages/IntegrationsPage'
 import ScannerPage from './pages/ScannerPage'
 import PricingPage from './pages/PricingPage'
 import BillingPage from './pages/BillingPage'
+import ProfilePage from './pages/ProfilePage'
 
 const router = createBrowserRouter([
   {
@@ -45,6 +46,7 @@ const router = createBrowserRouter([
           { path: 'integrations', element: <IntegrationsPage /> }, // Integraciones (Mercado Libre, etc.)
           { path: 'scanner', element: <ScannerPage /> }, // Scanner de código de barras
           { path: 'billing', element: <BillingPage /> }, // Facturación y suscripción
+          { path: 'profile', element: <ProfilePage /> }, // Perfil de usuario
           { path: 'admin/users', element: <AdminUsersPage /> }, // Admin only
           { path: 'admin/audit-logs', element: <AdminAuditLogPage /> }, // Admin only - Registro de Auditoría
           { path: 'sentry-test', element: <SentryTestPage /> }, // Testing page

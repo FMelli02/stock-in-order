@@ -16,14 +16,14 @@ import (
 // GetDashboardMetrics maneja GET /api/v1/dashboard/metrics
 func GetDashboardMetrics(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 
 		dm := &models.DashboardModel{DB: db}
-		metrics, err := dm.GetMetrics(userID)
+		metrics, err := dm.GetMetrics(organizationID)
 		if err != nil {
 			http.Error(w, "could not fetch metrics", http.StatusInternalServerError)
 			return
@@ -37,14 +37,14 @@ func GetDashboardMetrics(db *pgxpool.Pool) http.HandlerFunc {
 // GetDashboardKPIs maneja GET /api/v1/dashboard/kpis
 func GetDashboardKPIs(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 
 		dm := &models.DashboardModel{DB: db}
-		kpis, err := dm.GetDashboardKPIs(userID)
+		kpis, err := dm.GetDashboardKPIs(organizationID)
 		if err != nil {
 			http.Error(w, "could not fetch KPIs", http.StatusInternalServerError)
 			return
@@ -58,14 +58,14 @@ func GetDashboardKPIs(db *pgxpool.Pool) http.HandlerFunc {
 // GetDashboardCharts maneja GET /api/v1/dashboard/charts
 func GetDashboardCharts(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 
 		dm := &models.DashboardModel{DB: db}
-		chartData, err := dm.GetChartData(userID)
+		chartData, err := dm.GetChartData(organizationID)
 		if err != nil {
 			http.Error(w, "could not fetch chart data", http.StatusInternalServerError)
 			return

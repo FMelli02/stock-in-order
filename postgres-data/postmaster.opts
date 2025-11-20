@@ -1,1 +1,1 @@
-/usr/local/bin/postgres
+/usr/local/bin/postgres "-c" "log_statement=none" "-c" "log_min_duration_statement=1000" "-c" "log_connections=off" "-c" "log_disconnections=off" "-c" "log_duration=off" "-c" "log_line_prefix="

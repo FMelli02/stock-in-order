@@ -1,5 +1,6 @@
 import { Outlet } from 'react-router-dom'
 import Sidebar from '../components/Sidebar'
+import ScannerFAB from '../components/ScannerFAB'
 
 export default function MainLayout() {
   return (
@@ -8,6 +9,8 @@ export default function MainLayout() {
       <main className="flex-1 p-6">
         <Outlet />
       </main>
+      {/* Botón flotante para acceso rápido al scanner en móviles */}
+      <ScannerFAB />
     </div>
   )
 }

@@ -53,6 +53,13 @@ func SetupRouter(db *pgxpool.Pool, rabbit *rabbitmq.Client, auditRepo *repositor
 	api.HandleFunc("/users/register", handlers.RegisterUser(db)).Methods("POST")
 	api.HandleFunc("/users/login", handlers.LoginUser(db, cfg.JWTSecret)).Methods("POST")
 
+	// Obtener usuario autenticado (protegido por JWT)
+	api.Handle("/users/me",
+		middleware.JWTMiddleware(
+			http.HandlerFunc(handlers.GetCurrentUser(db)),
+			cfg.JWTSecret,
+		)).Methods("GET")
+
 	// Helper function to combine JWT + Active Subscription middlewares (PAYWALL)
 	withPaywall := func(handler http.Handler) http.Handler {
 		return middleware.JWTMiddleware(

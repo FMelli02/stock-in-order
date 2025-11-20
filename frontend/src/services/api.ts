@@ -20,6 +20,14 @@ api.interceptors.request.use((config) => {
     if (token) {
       config.headers = config.headers ?? {}
       ;(config.headers as Record<string, string>)['Authorization'] = `Bearer ${token}`
+      console.log('API Request:', {
+        url: config.url,
+        method: config.method,
+        hasToken: !!token,
+        tokenPreview: token ? `${token.substring(0, 20)}...` : 'none'
+      })
+    } else {
+      console.warn('API Request without token:', config.url)
     }
   }
   return config
@@ -55,8 +63,20 @@ api.interceptors.response.use(
 
     // Auto-logout on 401 responses
     if (error?.response?.status === 401 && typeof window !== 'undefined') {
-      localStorage.removeItem('authToken')
-      if (window.location.pathname !== '/login') {
+      const currentPath = window.location.pathname
+      
+      // NUNCA redirigir en /profile - dejar que el componente use AuthContext
+      if (currentPath.includes('/profile') || currentPath.includes('/mi-perfil')) {
+        console.warn('⚠️ 401 en /profile - ignorando (usando AuthContext)')
+        return Promise.reject(error)
+      }
+      
+      // En otras páginas protegidas, hacer logout y redirigir
+      if (!['/login', '/register', '/pricing'].includes(currentPath)) {
+        console.error('❌ 401 Unauthorized - Cerrando sesión y redirigiendo')
+        localStorage.removeItem('authToken')
+        localStorage.removeItem('user')
+        sessionStorage.setItem('redirectAfterLogin', currentPath)
         window.location.href = '/login'
       }
     }

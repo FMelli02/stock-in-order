@@ -38,15 +38,15 @@ func (m *SupplierModel) Insert(s *Supplier) error {
 		Scan(&s.ID, &s.CreatedAt)
 }
 
-// GetByID returns a supplier by ID if it belongs to the user.
-func (m *SupplierModel) GetByID(id int64, userID int64) (*Supplier, error) {
+// GetByID returns a supplier by ID if it belongs to the organization.
+func (m *SupplierModel) GetByID(id int64, organizationID int64) (*Supplier, error) {
 	const q = `
 		SELECT id, name, contact_person, email, phone, address, user_id, created_at
 		FROM suppliers
 		WHERE id = $1 AND user_id = $2`
 
 	var s Supplier
-	err := m.DB.QueryRow(context.Background(), q, id, userID).Scan(
+	err := m.DB.QueryRow(context.Background(), q, id, organizationID).Scan(
 		&s.ID, &s.Name, &s.ContactPerson, &s.Email, &s.Phone, &s.Address, &s.UserID, &s.CreatedAt,
 	)
 	if err != nil {
@@ -58,15 +58,15 @@ func (m *SupplierModel) GetByID(id int64, userID int64) (*Supplier, error) {
 	return &s, nil
 }
 
-// GetAllForUser lists all suppliers for a user.
-func (m *SupplierModel) GetAllForUser(userID int64) ([]Supplier, error) {
+// GetAllForUser lists all suppliers for an organization.
+func (m *SupplierModel) GetAllForUser(organizationID int64) ([]Supplier, error) {
 	const q = `
 		SELECT id, name, contact_person, email, phone, address, user_id, created_at
 		FROM suppliers
 		WHERE user_id = $1
 		ORDER BY id`
 
-	rows, err := m.DB.Query(context.Background(), q, userID)
+	rows, err := m.DB.Query(context.Background(), q, organizationID)
 	if err != nil {
 		return nil, err
 	}
@@ -86,14 +86,14 @@ func (m *SupplierModel) GetAllForUser(userID int64) ([]Supplier, error) {
 	return out, nil
 }
 
-// Update updates a supplier if it belongs to the user.
-func (m *SupplierModel) Update(id int64, userID int64, s *Supplier) error {
+// Update updates a supplier if it belongs to the organization.
+func (m *SupplierModel) Update(id int64, organizationID int64, s *Supplier) error {
 	const q = `
 		UPDATE suppliers
 		SET name = $1, contact_person = $2, email = $3, phone = $4, address = $5
 		WHERE id = $6 AND user_id = $7`
 
-	tag, err := m.DB.Exec(context.Background(), q, s.Name, s.ContactPerson, s.Email, s.Phone, s.Address, id, userID)
+	tag, err := m.DB.Exec(context.Background(), q, s.Name, s.ContactPerson, s.Email, s.Phone, s.Address, id, organizationID)
 	if err != nil {
 		return err
 	}
@@ -103,13 +103,13 @@ func (m *SupplierModel) Update(id int64, userID int64, s *Supplier) error {
 	return nil
 }
 
-// Delete deletes a supplier if it belongs to the user.
-func (m *SupplierModel) Delete(id int64, userID int64) error {
+// Delete deletes a supplier if it belongs to the organization.
+func (m *SupplierModel) Delete(id int64, organizationID int64) error {
 	const q = `
 		DELETE FROM suppliers
 		WHERE id = $1 AND user_id = $2`
 
-	tag, err := m.DB.Exec(context.Background(), q, id, userID)
+	tag, err := m.DB.Exec(context.Background(), q, id, organizationID)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23503" { // foreign_key_violation

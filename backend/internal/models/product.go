@@ -56,9 +56,9 @@ func (m *ProductModel) Insert(p *Product) error {
 	return nil
 }
 
-// GetByID returns a product by ID for a given user.
+// GetByID returns a product by ID for a given organization.
 // Ahora calcula quantity desde product_batches con SUM()
-func (m *ProductModel) GetByID(id int64, userID int64) (*Product, error) {
+func (m *ProductModel) GetByID(id int64, organizationID int64) (*Product, error) {
 	const q = `
 		SELECT 
 			p.id, 
@@ -76,7 +76,7 @@ func (m *ProductModel) GetByID(id int64, userID int64) (*Product, error) {
 		GROUP BY p.id, p.name, p.sku, p.description, p.stock_minimo, p.notificado, p.user_id, p.created_at`
 
 	var p Product
-	err := m.DB.QueryRow(context.Background(), q, id, userID).Scan(
+	err := m.DB.QueryRow(context.Background(), q, id, organizationID).Scan(
 		&p.ID, &p.Name, &p.SKU, &p.Description, &p.StockMinimo, &p.Notificado, &p.UserID, &p.CreatedAt, &p.CalculatedQuantity,
 	)
 	if err != nil {
@@ -88,9 +88,9 @@ func (m *ProductModel) GetByID(id int64, userID int64) (*Product, error) {
 	return &p, nil
 }
 
-// GetAllForUser returns all products for a given user.
+// GetAllForUser returns all products for a given organization.
 // Ahora calcula quantity desde product_batches con SUM()
-func (m *ProductModel) GetAllForUser(userID int64) ([]Product, error) {
+func (m *ProductModel) GetAllForUser(organizationID int64) ([]Product, error) {
 	const q = `
 		SELECT 
 			p.id, 
@@ -108,7 +108,7 @@ func (m *ProductModel) GetAllForUser(userID int64) ([]Product, error) {
 		GROUP BY p.id, p.name, p.sku, p.description, p.stock_minimo, p.notificado, p.user_id, p.created_at
 		ORDER BY p.name`
 
-	rows, err := m.DB.Query(context.Background(), q, userID)
+	rows, err := m.DB.Query(context.Background(), q, organizationID)
 	if err != nil {
 		return nil, err
 	}
@@ -128,15 +128,15 @@ func (m *ProductModel) GetAllForUser(userID int64) ([]Product, error) {
 	return products, nil
 }
 
-// Update updates a product if it belongs to the user.
+// Update updates a product if it belongs to the organization.
 // NOTE: Ya no actualiza quantity - se maneja via product_batches
-func (m *ProductModel) Update(id int64, userID int64, p *Product) error {
+func (m *ProductModel) Update(id int64, organizationID int64, p *Product) error {
 	const q = `
 		UPDATE products
 		SET name = $1, sku = $2, description = $3, stock_minimo = $4
 		WHERE id = $5 AND user_id = $6`
 
-	tag, err := m.DB.Exec(context.Background(), q, p.Name, p.SKU, p.Description, p.StockMinimo, id, userID)
+	tag, err := m.DB.Exec(context.Background(), q, p.Name, p.SKU, p.Description, p.StockMinimo, id, organizationID)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" { // unique_violation
@@ -150,13 +150,13 @@ func (m *ProductModel) Update(id int64, userID int64, p *Product) error {
 	return nil
 }
 
-// Delete deletes a product if it belongs to the user.
-func (m *ProductModel) Delete(id int64, userID int64) error {
+// Delete deletes a product if it belongs to the organization.
+func (m *ProductModel) Delete(id int64, organizationID int64) error {
 	const q = `
 		DELETE FROM products
 		WHERE id = $1 AND user_id = $2`
 
-	tag, err := m.DB.Exec(context.Background(), q, id, userID)
+	tag, err := m.DB.Exec(context.Background(), q, id, organizationID)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23503" { // foreign_key_violation
@@ -173,7 +173,7 @@ func (m *ProductModel) Delete(id int64, userID int64) error {
 // AdjustStock está DEPRECATED - ahora se debe usar product_batches
 // Este método será eliminado en versiones futuras
 // Para ajustar stock, crear/modificar lotes en product_batches
-func (m *ProductModel) AdjustStock(productID int64, userID int64, quantityChange int, reason string) error {
+func (m *ProductModel) AdjustStock(productID int64, organizationID int64, quantityChange int, reason string) error {
 	// DEPRECATED: La columna quantity ya no existe en products
 	// El stock ahora se calcula desde product_batches
 	return errors.New("AdjustStock is deprecated - use product_batches instead")

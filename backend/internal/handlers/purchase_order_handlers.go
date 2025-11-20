@@ -28,7 +28,7 @@ type CreatePurchaseOrderInput struct {
 // CreatePurchaseOrder handles POST /api/v1/purchase-orders
 func CreatePurchaseOrder(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -45,7 +45,7 @@ func CreatePurchaseOrder(db *pgxpool.Pool) http.HandlerFunc {
 		}
 
 		order := &models.PurchaseOrder{
-			UserID: userID,
+			UserID: organizationID,
 			Status: "pending",
 		}
 		if in.SupplierID > 0 {
@@ -88,14 +88,14 @@ func CreatePurchaseOrder(db *pgxpool.Pool) http.HandlerFunc {
 // GetPurchaseOrders handles GET /api/v1/purchase-orders
 func GetPurchaseOrders(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 
 		pom := &models.PurchaseOrderModel{DB: db}
-		orders, err := pom.GetAllForUser(userID)
+		orders, err := pom.GetAllForUser(organizationID)
 		if err != nil {
 			http.Error(w, "could not fetch purchase orders", http.StatusInternalServerError)
 			return
@@ -108,7 +108,7 @@ func GetPurchaseOrders(db *pgxpool.Pool) http.HandlerFunc {
 // GetPurchaseOrderByID handles GET /api/v1/purchase-orders/{id}
 func GetPurchaseOrderByID(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -118,7 +118,7 @@ func GetPurchaseOrderByID(db *pgxpool.Pool) http.HandlerFunc {
 		id, _ := strconv.ParseInt(vars["id"], 10, 64)
 
 		pom := &models.PurchaseOrderModel{DB: db}
-		order, items, err := pom.GetByID(id, userID)
+		order, items, err := pom.GetByID(id, organizationID)
 		if err != nil {
 			if err == models.ErrNotFound {
 				http.NotFound(w, r)
@@ -143,7 +143,7 @@ func UpdatePurchaseOrderStatus(db *pgxpool.Pool) http.HandlerFunc {
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -163,7 +163,7 @@ func UpdatePurchaseOrderStatus(db *pgxpool.Pool) http.HandlerFunc {
 		}
 
 		pom := &models.PurchaseOrderModel{DB: db}
-		if err := pom.UpdateStatus(id, userID, in.Status); err != nil {
+		if err := pom.UpdateStatus(id, organizationID, in.Status); err != nil {
 			if err == models.ErrNotFound {
 				http.NotFound(w, r)
 				return

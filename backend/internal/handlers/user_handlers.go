@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -64,11 +65,18 @@ func registerUserHandler(store userInserter) http.HandlerFunc {
 			return
 		}
 
+		// Si el rol no está especificado, usar 'vendedor' por defecto
+		role := in.Role
+		if role == "" {
+			role = "vendedor"
+		}
+
 		user := &models.User{
-			Name:         in.Name,
-			Email:        in.Email,
-			PasswordHash: hash,
-			Role:         in.Role, // Use role from input (or will default to 'vendedor' in DB)
+			Name:           in.Name,
+			Email:          in.Email,
+			PasswordHash:   hash,
+			Role:           role,
+			OrganizationID: 0, // Se asignará en Insert si es admin, o debe ser asignado por el admin creador
 		}
 
 		if err := store.Insert(user); err != nil {
@@ -77,6 +85,7 @@ func registerUserHandler(store userInserter) http.HandlerFunc {
 				_ = json.NewEncoder(w).Encode(map[string]any{"error": "email already exists"})
 				return
 			}
+			slog.Error("Error creating user", "error", err.Error())
 			http.Error(w, "could not create user", http.StatusInternalServerError)
 			return
 		}
@@ -130,11 +139,12 @@ func LoginUser(db *pgxpool.Pool, jwtSecret string) http.HandlerFunc {
 
 		// Create JWT token
 		claims := jwt.MapClaims{
-			"user_id": user.ID,
-			"email":   user.Email, // Incluir el email para auditoría
-			"role":    user.Role,  // Incluir el rol del usuario en el token
-			"exp":     jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
-			"iat":     jwt.NewNumericDate(time.Now()),
+			"user_id":         user.ID,
+			"email":           user.Email,          // Incluir el email para auditoría
+			"role":            user.Role,           // Incluir el rol del usuario en el token
+			"organization_id": user.OrganizationID, // Incluir organization_id para filtrado de datos
+			"exp":             jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
+			"iat":             jwt.NewNumericDate(time.Now()),
 		}
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 		signed, err := token.SignedString([]byte(jwtSecret))
@@ -178,11 +188,20 @@ func CreateUserByAdmin(db *pgxpool.Pool) http.HandlerFunc {
 			return
 		}
 
+		// Obtener organization_id del admin que está creando el usuario
+		adminOrgID, ok := r.Context().Value("organization_id").(int64)
+		if !ok {
+			// Fallback: usar el user_id del admin
+			adminUserID, _ := r.Context().Value("user_id").(int64)
+			adminOrgID = adminUserID
+		}
+
 		user := &models.User{
-			Name:         in.Name,
-			Email:        in.Email,
-			PasswordHash: hash,
-			Role:         in.Role, // Explicit role from admin
+			Name:           in.Name,
+			Email:          in.Email,
+			PasswordHash:   hash,
+			Role:           in.Role,    // Explicit role from admin
+			OrganizationID: adminOrgID, // Heredar organization_id del admin creador
 		}
 
 		um := &models.UserModel{DB: db}
@@ -198,6 +217,46 @@ func CreateUserByAdmin(db *pgxpool.Pool) http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"id":         user.ID,
+			"name":       user.Name,
+			"email":      user.Email,
+			"role":       user.Role,
+			"created_at": user.CreatedAt,
+		})
+	}
+}
+
+// GetCurrentUser retorna la información del usuario autenticado
+func GetCurrentUser(db *pgxpool.Pool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Obtener user_id del contexto (inyectado por JWTMiddleware)
+		userIDValue := r.Context().Value("user_id")
+		if userIDValue == nil {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		userID, ok := userIDValue.(int64)
+		if !ok {
+			http.Error(w, "invalid user_id in context", http.StatusInternalServerError)
+			return
+		}
+
+		// Obtener usuario de la BD
+		um := &models.UserModel{DB: db}
+		user, err := um.GetByID(userID)
+		if err != nil {
+			if err == models.ErrNotFound {
+				http.Error(w, "user not found", http.StatusNotFound)
+				return
+			}
+			http.Error(w, "could not fetch user", http.StatusInternalServerError)
+			return
+		}
+
+		// Responder con datos del usuario (sin password hash)
+		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"id":         user.ID,
 			"name":       user.Name,

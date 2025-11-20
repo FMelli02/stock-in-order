@@ -38,7 +38,7 @@ func NewIntegrationHandlers(
 // GET /api/v1/integrations/mercadolibre/connect
 func (h *IntegrationHandlers) HandleMercadoLibreConnect(w http.ResponseWriter, r *http.Request) {
 	// Obtener el user_id del contexto (viene del middleware de autenticación)
-	userID, ok := middleware.UserIDFromContext(r.Context())
+	organizationID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
 		slog.Error("HandleMercadoLibreConnect: user_id not found in context")
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -46,13 +46,13 @@ func (h *IntegrationHandlers) HandleMercadoLibreConnect(w http.ResponseWriter, r
 	}
 
 	// Usar el user_id como state para rastrear quién inició el proceso
-	state := fmt.Sprintf("%d", userID)
+	state := fmt.Sprintf("%d", organizationID)
 
 	// Generar la URL de autorización
 	authURL := h.MercadoLibreService.GetAuthorizationURL(state)
 
 	slog.Info("HandleMercadoLibreConnect: redirecting to MercadoLibre",
-		"user_id", userID,
+		"user_id", organizationID,
 		"auth_url", authURL)
 
 	// Redirigir al usuario a Mercado Libre
@@ -84,7 +84,7 @@ func (h *IntegrationHandlers) HandleMercadoLibreCallback(w http.ResponseWriter, 
 	}
 
 	// Convertir el state (user_id) a int64
-	userID, err := strconv.ParseInt(state, 10, 64)
+	organizationID, err := strconv.ParseInt(state, 10, 64)
 	if err != nil {
 		slog.Error("HandleMercadoLibreCallback: invalid state", "state", state, "error", err)
 		redirectURL := fmt.Sprintf("%s/integrations?success=false&error=invalid_state", h.FrontendURL)
@@ -93,14 +93,14 @@ func (h *IntegrationHandlers) HandleMercadoLibreCallback(w http.ResponseWriter, 
 	}
 
 	slog.Info("HandleMercadoLibreCallback: processing callback",
-		"user_id", userID,
+		"user_id", organizationID,
 		"code", code[:10]+"...") // Solo logueamos parte del código por seguridad
 
 	// Intercambiar el código por tokens
 	tokenResp, err := h.MercadoLibreService.ExchangeCodeForToken(code)
 	if err != nil {
 		slog.Error("HandleMercadoLibreCallback: failed to exchange code for token",
-			"user_id", userID,
+			"user_id", organizationID,
 			"error", err)
 		redirectURL := fmt.Sprintf("%s/integrations?success=false&error=token_exchange_failed", h.FrontendURL)
 		http.Redirect(w, r, redirectURL, http.StatusFound)
@@ -108,7 +108,7 @@ func (h *IntegrationHandlers) HandleMercadoLibreCallback(w http.ResponseWriter, 
 	}
 
 	slog.Info("HandleMercadoLibreCallback: successfully obtained tokens",
-		"user_id", userID,
+		"user_id", organizationID,
 		"ml_user_id", tokenResp.UserID,
 		"expires_in", tokenResp.ExpiresIn)
 
@@ -120,7 +120,7 @@ func (h *IntegrationHandlers) HandleMercadoLibreCallback(w http.ResponseWriter, 
 
 	// Crear la integración
 	integration := &models.Integration{
-		UserID:         userID,
+		UserID:         organizationID,
 		Platform:       "mercadolibre",
 		ExternalUserID: &externalUserID,
 		AccessToken:    tokenResp.AccessToken,
@@ -132,7 +132,7 @@ func (h *IntegrationHandlers) HandleMercadoLibreCallback(w http.ResponseWriter, 
 	err = h.IntegrationModel.UpsertByUserAndPlatform(integration)
 	if err != nil {
 		slog.Error("HandleMercadoLibreCallback: failed to save integration",
-			"user_id", userID,
+			"user_id", organizationID,
 			"error", err)
 		redirectURL := fmt.Sprintf("%s/integrations?success=false&error=database_error", h.FrontendURL)
 		http.Redirect(w, r, redirectURL, http.StatusFound)
@@ -140,7 +140,7 @@ func (h *IntegrationHandlers) HandleMercadoLibreCallback(w http.ResponseWriter, 
 	}
 
 	slog.Info("HandleMercadoLibreCallback: integration saved successfully",
-		"user_id", userID,
+		"user_id", organizationID,
 		"integration_id", integration.ID)
 
 	// Redirigir al frontend con éxito
@@ -151,16 +151,16 @@ func (h *IntegrationHandlers) HandleMercadoLibreCallback(w http.ResponseWriter, 
 // HandleListIntegrations devuelve todas las integraciones del usuario autenticado
 // GET /api/v1/integrations
 func (h *IntegrationHandlers) HandleListIntegrations(w http.ResponseWriter, r *http.Request) {
-	userID, ok := middleware.UserIDFromContext(r.Context())
+	organizationID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	integrations, err := h.IntegrationModel.GetAllForUser(userID)
+	integrations, err := h.IntegrationModel.GetAllForUser(organizationID)
 	if err != nil {
 		slog.Error("HandleListIntegrations: failed to get integrations",
-			"user_id", userID,
+			"user_id", organizationID,
 			"error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
@@ -196,7 +196,7 @@ func (h *IntegrationHandlers) HandleListIntegrations(w http.ResponseWriter, r *h
 // HandleDeleteIntegration elimina una integración específica
 // DELETE /api/v1/integrations/{platform}
 func (h *IntegrationHandlers) HandleDeleteIntegration(w http.ResponseWriter, r *http.Request) {
-	userID, ok := middleware.UserIDFromContext(r.Context())
+	organizationID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
@@ -208,14 +208,14 @@ func (h *IntegrationHandlers) HandleDeleteIntegration(w http.ResponseWriter, r *
 		return
 	}
 
-	err := h.IntegrationModel.Delete(userID, platform)
+	err := h.IntegrationModel.Delete(organizationID, platform)
 	if err != nil {
 		if err == models.ErrNotFound {
 			http.Error(w, "Integration not found", http.StatusNotFound)
 			return
 		}
 		slog.Error("HandleDeleteIntegration: failed to delete integration",
-			"user_id", userID,
+			"user_id", organizationID,
 			"platform", platform,
 			"error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -223,7 +223,7 @@ func (h *IntegrationHandlers) HandleDeleteIntegration(w http.ResponseWriter, r *
 	}
 
 	slog.Info("HandleDeleteIntegration: integration deleted",
-		"user_id", userID,
+		"user_id", organizationID,
 		"platform", platform)
 
 	w.WriteHeader(http.StatusNoContent)

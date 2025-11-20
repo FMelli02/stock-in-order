@@ -17,9 +17,10 @@ import (
 type ctxKey string
 
 const (
-	userIDKey    ctxKey = "user_id"
-	userEmailKey ctxKey = "user_email"
-	userRoleKey  ctxKey = "user_role"
+	userIDKey         ctxKey = "user_id"
+	userEmailKey      ctxKey = "user_email"
+	userRoleKey       ctxKey = "user_role"
+	organizationIDKey ctxKey = "organization_id"
 )
 
 // JWTMiddleware validates a Bearer token and injects user_id into request context.
@@ -88,10 +89,27 @@ func JWTMiddleware(next http.Handler, jwtSecret string) http.Handler {
 		emailVal, _ := claims["email"]
 		email, _ := emailVal.(string)
 
-		// Inject user_id, email, and role into context
+		// Extract organization_id from token claims
+		orgIDVal, _ := claims["organization_id"]
+		var orgID int64
+		switch v := orgIDVal.(type) {
+		case float64:
+			orgID = int64(v)
+		case int64:
+			orgID = v
+		case json.Number:
+			parsed, _ := v.Int64()
+			orgID = parsed
+		default:
+			// Si no hay organization_id en el token, usar el user_id (para admins)
+			orgID = uid
+		}
+
+		// Inject user_id, email, role, and organization_id into context
 		ctx := context.WithValue(r.Context(), userIDKey, uid)
 		ctx = context.WithValue(ctx, userEmailKey, email)
 		ctx = context.WithValue(ctx, userRoleKey, role)
+		ctx = context.WithValue(ctx, organizationIDKey, orgID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -124,6 +142,16 @@ func UserEmailFromContext(ctx context.Context) (string, bool) {
 	}
 	email, ok := v.(string)
 	return email, ok
+}
+
+// OrganizationIDFromContext retrieves the organization ID stored by JWTMiddleware.
+func OrganizationIDFromContext(ctx context.Context) (int64, bool) {
+	v := ctx.Value(organizationIDKey)
+	if v == nil {
+		return 0, false
+	}
+	orgID, ok := v.(int64)
+	return orgID, ok
 }
 
 // RequireRole is a middleware that restricts access based on user role.
@@ -214,22 +242,33 @@ func RequireActiveSubscription(db *pgxpool.Pool) func(http.Handler) http.Handler
 			subscription, err := sm.GetByUserID(userID)
 			if err != nil {
 				if err == models.ErrNotFound {
-					// Usuario sin suscripción → crear una gratuita automáticamente
-					slog.Warn("Usuario sin suscripción, se requiere crear una", "userID", userID)
-					w.WriteHeader(http.StatusPaymentRequired)
-					_ = json.NewEncoder(w).Encode(map[string]any{
-						"error":       "No tienes una suscripción activa",
-						"message":     "Para continuar usando la aplicación, necesitas una suscripción activa.",
-						"action":      "upgrade",
-						"upgrade_url": "/subscriptions/status",
-					})
+					// Usuario sin suscripción → crear una GRATUITA automáticamente
+					slog.Warn("Usuario sin suscripción, creando plan FREE automáticamente", "userID", userID)
+
+					// Crear suscripción FREE (no expira)
+					newSubscription := &models.Subscription{
+						UserID:             userID,
+						PlanID:             models.PlanFree,
+						Status:             models.SubscriptionStatusActive,
+						CurrentPeriodStart: nil, // FREE no tiene periodos
+						CurrentPeriodEnd:   nil,
+					}
+
+					if err := sm.Create(newSubscription); err != nil {
+						slog.Error("Error creando suscripción FREE", "error", err, "userID", userID)
+						http.Error(w, "Error inicializando cuenta", http.StatusInternalServerError)
+						return
+					}
+
+					// Usar la nueva suscripción
+					subscription = newSubscription
+					slog.Info("Suscripción FREE creada exitosamente", "userID", userID)
+				} else {
+					// Error al consultar DB
+					slog.Error("Error obteniendo suscripción", "error", err, "userID", userID)
+					http.Error(w, "Error verificando suscripción", http.StatusInternalServerError)
 					return
 				}
-
-				// Error al consultar DB
-				slog.Error("Error obteniendo suscripción", "error", err, "userID", userID)
-				http.Error(w, "Error verificando suscripción", http.StatusInternalServerError)
-				return
 			}
 
 			// Verificar que la suscripción esté activa

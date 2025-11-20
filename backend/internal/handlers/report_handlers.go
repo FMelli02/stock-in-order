@@ -19,7 +19,7 @@ import (
 // Genera un archivo Excel profesional con todos los productos del usuario
 func ExportProductsXLSX(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -27,7 +27,7 @@ func ExportProductsXLSX(db *pgxpool.Pool) http.HandlerFunc {
 
 		// Obtener todos los productos del usuario
 		pm := &models.ProductModel{DB: db}
-		products, err := pm.GetAllForUser(userID)
+		products, err := pm.GetAllForUser(organizationID)
 		if err != nil {
 			http.Error(w, "could not fetch products", http.StatusInternalServerError)
 			return
@@ -92,7 +92,7 @@ func ExportProductsXLSX(db *pgxpool.Pool) http.HandlerFunc {
 // Genera un archivo Excel profesional con todos los clientes del usuario
 func ExportCustomersXLSX(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -100,7 +100,7 @@ func ExportCustomersXLSX(db *pgxpool.Pool) http.HandlerFunc {
 
 		// Obtener todos los clientes del usuario
 		cm := &models.CustomerModel{DB: db}
-		customers, err := cm.GetAllForUser(userID)
+		customers, err := cm.GetAllForUser(organizationID)
 		if err != nil {
 			http.Error(w, "could not fetch customers", http.StatusInternalServerError)
 			return
@@ -160,7 +160,7 @@ func ExportCustomersXLSX(db *pgxpool.Pool) http.HandlerFunc {
 // Genera un archivo Excel profesional con todos los proveedores del usuario
 func ExportSuppliersXLSX(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -168,7 +168,7 @@ func ExportSuppliersXLSX(db *pgxpool.Pool) http.HandlerFunc {
 
 		// Obtener todos los proveedores del usuario
 		sm := &models.SupplierModel{DB: db}
-		suppliers, err := sm.GetAllForUser(userID)
+		suppliers, err := sm.GetAllForUser(organizationID)
 		if err != nil {
 			http.Error(w, "could not fetch suppliers", http.StatusInternalServerError)
 			return
@@ -228,7 +228,7 @@ func ExportSuppliersXLSX(db *pgxpool.Pool) http.HandlerFunc {
 // Genera un archivo Excel con órdenes de venta filtradas por fecha y estado
 func ExportSalesOrdersXLSX(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -243,7 +243,7 @@ func ExportSalesOrdersXLSX(db *pgxpool.Pool) http.HandlerFunc {
 
 		// Obtener órdenes filtradas
 		som := &models.SalesOrderModel{DB: db}
-		orders, err := som.GetAllForUserWithFilters(userID, filters)
+		orders, err := som.GetAllForUserWithFilters(organizationID, filters)
 		if err != nil {
 			http.Error(w, "could not fetch sales orders", http.StatusInternalServerError)
 			return
@@ -303,7 +303,7 @@ func ExportSalesOrdersXLSX(db *pgxpool.Pool) http.HandlerFunc {
 // Genera un archivo Excel con órdenes de compra filtradas por fecha y estado
 func ExportPurchaseOrdersXLSX(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -318,7 +318,7 @@ func ExportPurchaseOrdersXLSX(db *pgxpool.Pool) http.HandlerFunc {
 
 		// Obtener órdenes filtradas
 		pom := &models.PurchaseOrderModel{DB: db}
-		orders, err := pom.GetAllForUserWithFilters(userID, filters)
+		orders, err := pom.GetAllForUserWithFilters(organizationID, filters)
 		if err != nil {
 			http.Error(w, "could not fetch purchase orders", http.StatusInternalServerError)
 			return
@@ -381,7 +381,7 @@ func ExportPurchaseOrdersXLSX(db *pgxpool.Pool) http.HandlerFunc {
 // Publica un mensaje a RabbitMQ para que el worker genere el reporte y lo envíe por email
 func RequestProductsReportByEmail(db *pgxpool.Pool, rabbit *rabbitmq.Client) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -389,7 +389,7 @@ func RequestProductsReportByEmail(db *pgxpool.Pool, rabbit *rabbitmq.Client) htt
 
 		// Obtener el email del usuario desde la base de datos
 		um := &models.UserModel{DB: db}
-		user, err := um.GetByID(userID)
+		user, err := um.GetByID(organizationID)
 		if err != nil {
 			http.Error(w, "could not fetch user info", http.StatusInternalServerError)
 			return
@@ -397,7 +397,7 @@ func RequestProductsReportByEmail(db *pgxpool.Pool, rabbit *rabbitmq.Client) htt
 
 		// Crear mensaje para RabbitMQ
 		req := rabbitmq.ReportRequest{
-			UserID:     userID,
+			UserID:     organizationID,
 			Email:      user.Email,
 			ReportType: "products",
 		}
@@ -424,7 +424,7 @@ func RequestProductsReportByEmail(db *pgxpool.Pool, rabbit *rabbitmq.Client) htt
 // Publica un mensaje a RabbitMQ para que el worker genere el reporte y lo envíe por email
 func RequestCustomersReportByEmail(db *pgxpool.Pool, rabbit *rabbitmq.Client) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -432,7 +432,7 @@ func RequestCustomersReportByEmail(db *pgxpool.Pool, rabbit *rabbitmq.Client) ht
 
 		// Obtener el email del usuario desde la base de datos
 		um := &models.UserModel{DB: db}
-		user, err := um.GetByID(userID)
+		user, err := um.GetByID(organizationID)
 		if err != nil {
 			http.Error(w, "could not fetch user info", http.StatusInternalServerError)
 			return
@@ -440,7 +440,7 @@ func RequestCustomersReportByEmail(db *pgxpool.Pool, rabbit *rabbitmq.Client) ht
 
 		// Crear mensaje para RabbitMQ
 		req := rabbitmq.ReportRequest{
-			UserID:     userID,
+			UserID:     organizationID,
 			Email:      user.Email,
 			ReportType: "customers",
 		}
@@ -467,7 +467,7 @@ func RequestCustomersReportByEmail(db *pgxpool.Pool, rabbit *rabbitmq.Client) ht
 // Publica un mensaje a RabbitMQ para que el worker genere el reporte y lo envíe por email
 func RequestSuppliersReportByEmail(db *pgxpool.Pool, rabbit *rabbitmq.Client) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -475,7 +475,7 @@ func RequestSuppliersReportByEmail(db *pgxpool.Pool, rabbit *rabbitmq.Client) ht
 
 		// Obtener el email del usuario desde la base de datos
 		um := &models.UserModel{DB: db}
-		user, err := um.GetByID(userID)
+		user, err := um.GetByID(organizationID)
 		if err != nil {
 			http.Error(w, "could not fetch user info", http.StatusInternalServerError)
 			return
@@ -483,7 +483,7 @@ func RequestSuppliersReportByEmail(db *pgxpool.Pool, rabbit *rabbitmq.Client) ht
 
 		// Crear mensaje para RabbitMQ
 		req := rabbitmq.ReportRequest{
-			UserID:     userID,
+			UserID:     organizationID,
 			Email:      user.Email,
 			ReportType: "suppliers",
 		}

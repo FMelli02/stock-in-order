@@ -106,13 +106,21 @@ func (m *DashboardModel) GetDashboardKPIs(userID int64) (*DashboardKPIs, error) 
 	}
 
 	// Productos con stock bajo (menor o igual a 5)
+	// Ahora calculamos desde product_batches
 	err = m.DB.QueryRow(ctx, `
-		SELECT COUNT(*) 
-		FROM products 
-		WHERE user_id = $1 AND quantity <= 5
+		SELECT COUNT(DISTINCT p.id)
+		FROM products p
+		LEFT JOIN product_batches pb ON p.id = pb.product_id AND pb.user_id = $1
+		WHERE p.user_id = $1
+		GROUP BY p.id
+		HAVING COALESCE(SUM(pb.quantity), 0) <= 5
 	`, userID).Scan(&kpis.LowStockProducts)
 	if err != nil {
-		return nil, err
+		// Si no hay productos con bajo stock, QueryRow retorna ErrNoRows
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return nil, err
+		}
+		kpis.LowStockProducts = 0
 	}
 
 	// Ventas del mes actual

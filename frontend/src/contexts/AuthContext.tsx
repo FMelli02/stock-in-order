@@ -14,6 +14,7 @@ interface AuthContextType {
   login: (token: string, userData: User) => void
   logout: () => void
   isAuthenticated: boolean
+  loading: boolean
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -21,23 +22,36 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [token, setToken] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
 
   // Initialize from localStorage on mount
   useEffect(() => {
+    console.log('🔄 Inicializando AuthContext...')
     const storedToken = localStorage.getItem('authToken')
     const storedUser = localStorage.getItem('user')
+    
+    console.log('📦 localStorage:', {
+      hasToken: !!storedToken,
+      hasUser: !!storedUser,
+      tokenPreview: storedToken ? storedToken.substring(0, 20) + '...' : 'none'
+    })
     
     if (storedToken && storedUser) {
       try {
         const userData = JSON.parse(storedUser) as User
         setToken(storedToken)
         setUser(userData)
+        console.log('✅ Auth cargado desde localStorage:', userData)
       } catch (err) {
-        console.error('Failed to parse stored user:', err)
+        console.error('❌ Error parseando usuario:', err)
         localStorage.removeItem('authToken')
         localStorage.removeItem('user')
       }
+    } else {
+      console.log('⚠️ No hay datos de autenticación en localStorage')
     }
+    
+    setLoading(false)
   }, [])
 
   const login = (newToken: string, userData: User) => {
@@ -62,6 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         logout,
         isAuthenticated: !!token && !!user,
+        loading,
       }}
     >
       {children}

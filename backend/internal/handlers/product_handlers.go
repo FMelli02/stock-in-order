@@ -16,7 +16,7 @@ import (
 // CreateProduct handles POST /api/v1/products
 func CreateProduct(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -26,6 +26,7 @@ func CreateProduct(db *pgxpool.Pool) http.HandlerFunc {
 			Name        string `json:"name"`
 			SKU         string `json:"sku"`
 			Description string `json:"description"`
+			Quantity    int    `json:"quantity"`
 			StockMinimo int    `json:"stock_minimo"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
@@ -33,10 +34,15 @@ func CreateProduct(db *pgxpool.Pool) http.HandlerFunc {
 			return
 		}
 
-		// Validación: stock_minimo no puede ser negativo
+		// Validación: stock_minimo y quantity no pueden ser negativos
 		if in.StockMinimo < 0 {
 			w.WriteHeader(http.StatusBadRequest)
 			_ = json.NewEncoder(w).Encode(map[string]any{"error": "stock_minimo cannot be negative"})
+			return
+		}
+		if in.Quantity < 0 {
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]any{"error": "quantity cannot be negative"})
 			return
 		}
 
@@ -45,7 +51,7 @@ func CreateProduct(db *pgxpool.Pool) http.HandlerFunc {
 			SKU:         in.SKU,
 			Description: &in.Description,
 			StockMinimo: in.StockMinimo,
-			UserID:      userID,
+			UserID:      organizationID,
 		}
 
 		pm := &models.ProductModel{DB: db}
@@ -59,25 +65,46 @@ func CreateProduct(db *pgxpool.Pool) http.HandlerFunc {
 			return
 		}
 
+		// Si se proporciona una cantidad inicial, crear un lote automáticamente
+		if in.Quantity > 0 {
+			batchInsert := `
+				INSERT INTO product_batches (product_id, user_id, quantity, lote_number)
+				VALUES ($1, $2, $3, $4)`
+
+			loteNumber := "INICIAL-" + p.SKU
+			if _, err := db.Exec(r.Context(), batchInsert, p.ID, organizationID, in.Quantity, loteNumber); err != nil {
+				slog.Error("Failed to create initial batch", "error", err, "productID", p.ID)
+				// No fallar la creación del producto, solo loggear el error
+			}
+		}
+
+		// Recargar el producto para obtener el quantity calculado
+		updatedProduct, err := pm.GetByID(p.ID, organizationID)
+		if err != nil {
+			slog.Error("Failed to reload product after creation", "error", err, "productID", p.ID)
+			// Retornar el producto original aunque no tenga quantity calculado
+			updatedProduct = p
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
-		_ = json.NewEncoder(w).Encode(p)
+		_ = json.NewEncoder(w).Encode(updatedProduct)
 	}
 }
 
 // ListProducts handles GET /api/v1/products
 func ListProducts(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 
 		pm := &models.ProductModel{DB: db}
-		items, err := pm.GetAllForUser(userID)
+		items, err := pm.GetAllForUser(organizationID)
 		if err != nil {
-			slog.Error("ListProducts failed", "error", err, "userID", userID)
+			slog.Error("ListProducts failed", "error", err, "organizationID", organizationID)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -89,7 +116,7 @@ func ListProducts(db *pgxpool.Pool) http.HandlerFunc {
 // GetProduct handles GET /api/v1/products/{id}
 func GetProduct(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -99,7 +126,7 @@ func GetProduct(db *pgxpool.Pool) http.HandlerFunc {
 		id, _ := strconv.ParseInt(vars["id"], 10, 64)
 
 		pm := &models.ProductModel{DB: db}
-		p, err := pm.GetByID(id, userID)
+		p, err := pm.GetByID(id, organizationID)
 		if err != nil {
 			if err == models.ErrNotFound {
 				http.NotFound(w, r)
@@ -117,7 +144,7 @@ func GetProduct(db *pgxpool.Pool) http.HandlerFunc {
 // UpdateProduct handles PUT /api/v1/products/{id}
 func UpdateProduct(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -130,6 +157,7 @@ func UpdateProduct(db *pgxpool.Pool) http.HandlerFunc {
 			Name        string `json:"name"`
 			SKU         string `json:"sku"`
 			Description string `json:"description"`
+			Quantity    int    `json:"quantity"`
 			StockMinimo int    `json:"stock_minimo"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
@@ -137,13 +165,32 @@ func UpdateProduct(db *pgxpool.Pool) http.HandlerFunc {
 			return
 		}
 
-		// Validación: stock_minimo no puede ser negativo
+		// Validación: stock_minimo y quantity no pueden ser negativos
 		if in.StockMinimo < 0 {
 			w.WriteHeader(http.StatusBadRequest)
 			_ = json.NewEncoder(w).Encode(map[string]any{"error": "stock_minimo cannot be negative"})
 			return
 		}
+		if in.Quantity < 0 {
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]any{"error": "quantity cannot be negative"})
+			return
+		}
 
+		pm := &models.ProductModel{DB: db}
+
+		// Obtener el producto actual para comparar quantity
+		currentProduct, err := pm.GetByID(id, organizationID)
+		if err != nil {
+			if err == models.ErrNotFound {
+				http.NotFound(w, r)
+				return
+			}
+			http.Error(w, "could not fetch product", http.StatusInternalServerError)
+			return
+		}
+
+		// Actualizar información básica del producto
 		p := &models.Product{
 			Name:        in.Name,
 			SKU:         in.SKU,
@@ -151,8 +198,7 @@ func UpdateProduct(db *pgxpool.Pool) http.HandlerFunc {
 			StockMinimo: in.StockMinimo,
 		}
 
-		pm := &models.ProductModel{DB: db}
-		if err := pm.Update(id, userID, p); err != nil {
+		if err := pm.Update(id, organizationID, p); err != nil {
 			if err == models.ErrNotFound {
 				http.NotFound(w, r)
 				return
@@ -166,6 +212,42 @@ func UpdateProduct(db *pgxpool.Pool) http.HandlerFunc {
 			return
 		}
 
+		// Si la quantity cambió, ajustar el lote principal
+		if in.Quantity != currentProduct.CalculatedQuantity {
+			quantityDiff := in.Quantity - currentProduct.CalculatedQuantity
+
+			// Buscar si existe un lote INICIAL para este producto
+			var batchID int64
+			batchQuery := `
+				SELECT id FROM product_batches 
+				WHERE product_id = $1 AND user_id = $2 
+				ORDER BY created_at ASC 
+				LIMIT 1`
+
+			err := db.QueryRow(r.Context(), batchQuery, id, organizationID).Scan(&batchID)
+			if err != nil {
+				// No existe un lote, crear uno nuevo
+				batchInsert := `
+					INSERT INTO product_batches (product_id, user_id, quantity, lote_number)
+					VALUES ($1, $2, $3, $4)`
+
+				loteNumber := "AJUSTE-" + in.SKU
+				if _, err := db.Exec(r.Context(), batchInsert, id, organizationID, in.Quantity, loteNumber); err != nil {
+					slog.Error("Failed to create adjustment batch", "error", err, "productID", id)
+				}
+			} else {
+				// Actualizar el lote existente
+				batchUpdate := `
+					UPDATE product_batches 
+					SET quantity = quantity + $1 
+					WHERE id = $2 AND user_id = $3`
+
+				if _, err := db.Exec(r.Context(), batchUpdate, quantityDiff, batchID, organizationID); err != nil {
+					slog.Error("Failed to update batch quantity", "error", err, "batchID", batchID)
+				}
+			}
+		}
+
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
@@ -173,7 +255,7 @@ func UpdateProduct(db *pgxpool.Pool) http.HandlerFunc {
 // DeleteProduct handles DELETE /api/v1/products/{id}
 func DeleteProduct(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -183,7 +265,7 @@ func DeleteProduct(db *pgxpool.Pool) http.HandlerFunc {
 		id, _ := strconv.ParseInt(vars["id"], 10, 64)
 
 		pm := &models.ProductModel{DB: db}
-		if err := pm.Delete(id, userID); err != nil {
+		if err := pm.Delete(id, organizationID); err != nil {
 			if err == models.ErrNotFound {
 				http.NotFound(w, r)
 				return
@@ -195,7 +277,7 @@ func DeleteProduct(db *pgxpool.Pool) http.HandlerFunc {
 				})
 				return
 			}
-			slog.Error("DeleteProduct failed", "error", err, "productID", id, "userID", userID)
+			slog.Error("DeleteProduct failed", "error", err, "productID", id, "organizationID", organizationID)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -207,7 +289,7 @@ func DeleteProduct(db *pgxpool.Pool) http.HandlerFunc {
 // GetProductMovements maneja GET /api/v1/products/{id}/movements
 func GetProductMovements(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -217,7 +299,7 @@ func GetProductMovements(db *pgxpool.Pool) http.HandlerFunc {
 		id, _ := strconv.ParseInt(vars["id"], 10, 64)
 
 		smm := &models.StockMovementModel{DB: db}
-		movements, err := smm.GetForProduct(id, userID)
+		movements, err := smm.GetForProduct(id, organizationID)
 		if err != nil {
 			http.Error(w, "could not fetch movements", http.StatusInternalServerError)
 			return
@@ -239,7 +321,7 @@ type StockAdjustmentInput struct {
 // AdjustProductStock maneja POST /api/v1/products/{id}/adjust-stock
 func AdjustProductStock(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -266,7 +348,7 @@ func AdjustProductStock(db *pgxpool.Pool) http.HandlerFunc {
 		}
 
 		pm := &models.ProductModel{DB: db}
-		if err := pm.AdjustStock(id, userID, in.QuantityChange, reason); err != nil {
+		if err := pm.AdjustStock(id, organizationID, in.QuantityChange, reason); err != nil {
 			if err == models.ErrNotFound {
 				http.NotFound(w, r)
 				return

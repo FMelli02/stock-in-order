@@ -11,13 +11,13 @@ import (
 func AdminOnlyTest() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Get user info from context
-		userID, _ := middleware.UserIDFromContext(r.Context())
+		organizationID, _ := middleware.UserIDFromContext(r.Context())
 		role, _ := middleware.UserRoleFromContext(r.Context())
 
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"message": "¡Bienvenido admin! Solo usuarios con rol 'admin' pueden ver esto.",
-			"user_id": userID,
+			"user_id": organizationID,
 			"role":    role,
 		})
 	}
@@ -27,13 +27,13 @@ func AdminOnlyTest() http.HandlerFunc {
 func VendedorOnlyTest() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Get user info from context
-		userID, _ := middleware.UserIDFromContext(r.Context())
+		organizationID, _ := middleware.UserIDFromContext(r.Context())
 		role, _ := middleware.UserRoleFromContext(r.Context())
 
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"message": "¡Bienvenido vendedor! Solo usuarios con rol 'vendedor' pueden ver esto.",
-			"user_id": userID,
+			"user_id": organizationID,
 			"role":    role,
 		})
 	}

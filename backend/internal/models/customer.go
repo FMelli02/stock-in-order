@@ -36,15 +36,15 @@ func (m *CustomerModel) Insert(c *Customer) error {
 		Scan(&c.ID, &c.CreatedAt)
 }
 
-// GetByID returns a customer by ID if it belongs to the user.
-func (m *CustomerModel) GetByID(id int64, userID int64) (*Customer, error) {
+// GetByID returns a customer by ID if it belongs to the organization.
+func (m *CustomerModel) GetByID(id int64, organizationID int64) (*Customer, error) {
 	const q = `
 		SELECT id, name, email, phone, address, user_id, created_at
 		FROM customers
 		WHERE id = $1 AND user_id = $2`
 
 	var c Customer
-	err := m.DB.QueryRow(context.Background(), q, id, userID).Scan(
+	err := m.DB.QueryRow(context.Background(), q, id, organizationID).Scan(
 		&c.ID, &c.Name, &c.Email, &c.Phone, &c.Address, &c.UserID, &c.CreatedAt,
 	)
 	if err != nil {
@@ -56,15 +56,15 @@ func (m *CustomerModel) GetByID(id int64, userID int64) (*Customer, error) {
 	return &c, nil
 }
 
-// GetAllForUser lists all customers for a user.
-func (m *CustomerModel) GetAllForUser(userID int64) ([]Customer, error) {
+// GetAllForUser lists all customers for an organization.
+func (m *CustomerModel) GetAllForUser(organizationID int64) ([]Customer, error) {
 	const q = `
 		SELECT id, name, email, phone, address, user_id, created_at
 		FROM customers
 		WHERE user_id = $1
 		ORDER BY id`
 
-	rows, err := m.DB.Query(context.Background(), q, userID)
+	rows, err := m.DB.Query(context.Background(), q, organizationID)
 	if err != nil {
 		return nil, err
 	}
@@ -84,14 +84,14 @@ func (m *CustomerModel) GetAllForUser(userID int64) ([]Customer, error) {
 	return out, nil
 }
 
-// Update updates a customer if it belongs to the user.
-func (m *CustomerModel) Update(id int64, userID int64, c *Customer) error {
+// Update updates a customer if it belongs to the organization.
+func (m *CustomerModel) Update(id int64, organizationID int64, c *Customer) error {
 	const q = `
 		UPDATE customers
 		SET name = $1, email = $2, phone = $3, address = $4
 		WHERE id = $5 AND user_id = $6`
 
-	tag, err := m.DB.Exec(context.Background(), q, c.Name, c.Email, c.Phone, c.Address, id, userID)
+	tag, err := m.DB.Exec(context.Background(), q, c.Name, c.Email, c.Phone, c.Address, id, organizationID)
 	if err != nil {
 		return err
 	}
@@ -101,13 +101,13 @@ func (m *CustomerModel) Update(id int64, userID int64, c *Customer) error {
 	return nil
 }
 
-// Delete deletes a customer if it belongs to the user.
-func (m *CustomerModel) Delete(id int64, userID int64) error {
+// Delete deletes a customer if it belongs to the organization.
+func (m *CustomerModel) Delete(id int64, organizationID int64) error {
 	const q = `
 		DELETE FROM customers
 		WHERE id = $1 AND user_id = $2`
 
-	tag, err := m.DB.Exec(context.Background(), q, id, userID)
+	tag, err := m.DB.Exec(context.Background(), q, id, organizationID)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23503" { // foreign_key_violation

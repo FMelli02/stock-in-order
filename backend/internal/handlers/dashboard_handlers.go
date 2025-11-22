@@ -16,7 +16,7 @@ import (
 // GetDashboardMetrics maneja GET /api/v1/dashboard/metrics
 func GetDashboardMetrics(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		organizationID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -37,7 +37,7 @@ func GetDashboardMetrics(db *pgxpool.Pool) http.HandlerFunc {
 // GetDashboardKPIs maneja GET /api/v1/dashboard/kpis
 func GetDashboardKPIs(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		organizationID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -58,7 +58,7 @@ func GetDashboardKPIs(db *pgxpool.Pool) http.HandlerFunc {
 // GetDashboardCharts maneja GET /api/v1/dashboard/charts
 func GetDashboardCharts(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		organizationID, ok := middleware.UserIDFromContext(r.Context())
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return

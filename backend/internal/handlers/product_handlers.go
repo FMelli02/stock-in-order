@@ -97,9 +97,12 @@ func ListProducts(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
+			slog.Error("ListProducts: No organization_id in context")
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
+
+		slog.Info("ListProducts called", "organizationID", organizationID)
 
 		pm := &models.ProductModel{DB: db}
 		items, err := pm.GetAllForUser(organizationID)
@@ -108,6 +111,9 @@ func ListProducts(db *pgxpool.Pool) http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+
+		slog.Info("ListProducts result", "organizationID", organizationID, "count", len(items))
+
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(items)
 	}

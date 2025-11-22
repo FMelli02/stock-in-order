@@ -65,10 +65,12 @@ func registerUserHandler(store userInserter) http.HandlerFunc {
 			return
 		}
 
-		// Si el rol no está especificado, usar 'vendedor' por defecto
-		role := in.Role
-		if role == "" {
-			role = "vendedor"
+		// El registro público SIEMPRE crea admins (cada registro es una organización nueva)
+		// Los vendedores/repositores solo pueden ser creados por un admin vía CreateUserByAdmin
+		role := "admin"
+		if in.Role != "" && in.Role != "admin" {
+			// Si se especifica un rol diferente, ignorarlo y forzar admin
+			slog.Warn("Public registration attempted with non-admin role, forcing admin", "requested_role", in.Role)
 		}
 
 		user := &models.User{
@@ -76,7 +78,7 @@ func registerUserHandler(store userInserter) http.HandlerFunc {
 			Email:          in.Email,
 			PasswordHash:   hash,
 			Role:           role,
-			OrganizationID: 0, // Se asignará en Insert si es admin, o debe ser asignado por el admin creador
+			OrganizationID: 0, // Se auto-asignará en Insert para admins
 		}
 
 		if err := store.Insert(user); err != nil {
@@ -194,7 +196,10 @@ func CreateUserByAdmin(db *pgxpool.Pool) http.HandlerFunc {
 			// Fallback: usar el user_id del admin
 			adminUserID, _ := r.Context().Value("user_id").(int64)
 			adminOrgID = adminUserID
+			slog.Warn("organization_id not in context, using user_id as fallback", "user_id", adminUserID)
 		}
+
+		slog.Info("Creating user", "admin_org_id", adminOrgID, "new_user_role", in.Role, "new_user_email", in.Email)
 
 		user := &models.User{
 			Name:           in.Name,
@@ -206,6 +211,7 @@ func CreateUserByAdmin(db *pgxpool.Pool) http.HandlerFunc {
 
 		um := &models.UserModel{DB: db}
 		if err := um.Insert(user); err != nil {
+			slog.Error("Failed to create user", "error", err, "email", in.Email, "role", in.Role, "organization_id", adminOrgID)
 			if err == models.ErrDuplicateEmail {
 				w.WriteHeader(http.StatusConflict)
 				_ = json.NewEncoder(w).Encode(map[string]any{"error": "email already exists"})

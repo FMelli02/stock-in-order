@@ -1,7 +1,7 @@
 # 📚 Implementaciones y Tecnologías - Stock In Order
 
-**Proyecto:** Sistema de Gestión de Inventario con Trazabilidad de Lotes  
-**Última Actualización:** 6 de Noviembre, 2025  
+**Proyecto:** Sistema de Gestión de Inventario con Trazabilidad de Lotes y Suscripciones  
+**Última Actualización:** 22 de Noviembre, 2025  
 **Estado:** En Producción ✅
 
 ---
@@ -12,11 +12,13 @@
 - Gestión de productos, clientes, proveedores
 - Órdenes de compra y venta con sistema de lotes
 - Trazabilidad completa con lógica FEFO
+- **Sistema multi-tenant con organizaciones** ⭐ **[NUEVO]**
 - Autenticación JWT con RBAC
 - Auditoría de operaciones
 - Integración con servicios externos
 - Sistema de reportes y exportación
 - Notificaciones por email
+- **Sistema de suscripciones con MercadoPago** ⭐ **[NUEVO]**
 - Monitoreo y logging estructurado
 
 ---
@@ -837,7 +839,9 @@ users (1) ─── (N) audit_logs
 | 000012 | `create_audit_logs_table` | Auditoría |
 | 000013 | `add_batch_tracking` | **Sistema de lotes** ⭐ |
 | 000014 | `add_batch_fields_to_purchase_items` | Campos de lote en compras ⭐ |
-| 000015 | `create_subscriptions_table` | **Tabla de suscripciones** ⭐ **[NUEVO]** |
+| 000015 | `create_subscriptions_table` | **Tabla de suscripciones** ⭐ |
+| 000016 | `add_plan_id_to_subscriptions` | Plan ID y features adicionales |
+| 000017 | `add_organization_id_to_users` | **Sistema multi-tenant** ⭐ **[NUEVO]** |
 
 ---
 
@@ -1075,7 +1079,420 @@ services:
 
 ---
 
-### **13. Sistema de Suscripciones y Pagos**
+### **13. Sistema Multi-Tenant con Organizaciones**
+
+**Tecnologías:**
+- PostgreSQL (columna organization_id)
+- JWT (claims de organización)
+- Go (middleware de contexto)
+- React (filtrado automático)
+
+**Funcionalidades:**
+- ✅ Cada admin es una organización independiente
+- ✅ Vendedores/Repositores comparten inventario del admin
+- ✅ Aislamiento completo entre organizaciones
+- ✅ JWT incluye organization_id
+- ✅ Filtrado automático en todas las queries
+- ✅ Migration sin pérdida de datos
+
+**Migración 000017:**
+```sql
+-- Agregar columna organization_id a users
+ALTER TABLE users ADD COLUMN organization_id BIGINT;
+
+-- Foreign key auto-referencial
+ALTER TABLE users 
+ADD CONSTRAINT fk_users_organization 
+FOREIGN KEY (organization_id) 
+REFERENCES users(id) 
+ON DELETE CASCADE;
+
+-- Para admins existentes: organization_id = su propio ID
+UPDATE users 
+SET organization_id = id 
+WHERE role = 'admin';
+
+-- Índice para performance
+CREATE INDEX idx_users_organization_id 
+ON users(organization_id);
+```
+
+**Modelo de Organización:**
+```
+Admin (ID=5, organization_id=5)
+  └─ Productos (user_id=5) → 15 productos
+  └─ Clientes (user_id=5) → 10 clientes
+  └─ Proveedores (user_id=5) → 5 proveedores
+  └─ Vendedor1 (ID=11, organization_id=5) → Ve los 15 productos
+  └─ Vendedor2 (ID=12, organization_id=5) → Ve los 15 productos
+  └─ Repositor1 (ID=13, organization_id=5) → Ve los 15 productos
+
+Admin Nuevo (ID=14, organization_id=14)
+  └─ Productos (user_id=14) → 0 productos (organización nueva)
+  └─ Vendedor3 (ID=15, organization_id=14) → Ve 0 productos
+```
+
+**JWT con Organization ID:**
+```go
+// Generación de token (LoginUser)
+token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+    "user_id":         user.ID,
+    "email":           user.Email,
+    "role":            user.Role,
+    "organization_id": user.OrganizationID,  // ⭐ NUEVO
+    "exp":             time.Now().Add(24 * time.Hour).Unix(),
+})
+```
+
+**Middleware de Contexto:**
+```go
+// Extraer organization_id del JWT
+func JWTMiddleware(next http.Handler, jwtSecret string) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        // ... validar JWT ...
+        
+        claims, _ := token.Claims.(jwt.MapClaims)
+        
+        // Extraer organization_id (con fallback a user_id para admins)
+        orgIDVal, _ := claims["organization_id"]
+        var orgID int64
+        switch v := orgIDVal.(type) {
+        case float64:
+            orgID = int64(v)
+        case int64:
+            orgID = v
+        default:
+            // Fallback: usar user_id para tokens viejos
+            orgID = userID
+        }
+        
+        // Inyectar en contexto
+        ctx := context.WithValue(r.Context(), organizationIDKey, orgID)
+        next.ServeHTTP(w, r.WithContext(ctx))
+    })
+}
+
+// Helper para obtener organization_id
+func OrganizationIDFromContext(ctx context.Context) (int64, bool) {
+    v := ctx.Value(organizationIDKey)
+    if v == nil {
+        return 0, false
+    }
+    orgID, ok := v.(int64)
+    return orgID, ok
+}
+```
+
+**Handlers Actualizados (todos):**
+```go
+// Antes (solo user_id)
+func ListProducts(db *pgxpool.Pool) http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        userID, _ := middleware.UserIDFromContext(r.Context())
+        products, _ := productModel.GetAllForUser(userID)
+        // ...
+    }
+}
+
+// Después (organization_id)
+func ListProducts(db *pgxpool.Pool) http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        organizationID, _ := middleware.OrganizationIDFromContext(r.Context())  // ⭐
+        products, _ := productModel.GetAllForUser(organizationID)
+        // ...
+    }
+}
+```
+
+**Modelos con Organization ID:**
+```go
+// Product Model
+func (m *ProductModel) GetAllForUser(organizationID int64) ([]Product, error) {
+    const q = `
+        SELECT p.id, p.name, p.sku, ...
+        FROM products p
+        WHERE p.user_id = $1  -- user_id sigue siendo la FK, pero recibe organization_id
+        ORDER BY p.name
+    `
+    rows, _ := m.DB.Query(ctx, q, organizationID)
+    // ...
+}
+
+// Customer Model
+func (m *CustomerModel) GetAllForUser(organizationID int64) ([]Customer, error) {
+    const q = `SELECT * FROM customers WHERE user_id = $1`
+    rows, _ := m.DB.Query(ctx, q, organizationID)
+    // ...
+}
+
+// Supplier Model
+func (m *SupplierModel) GetAllForUser(organizationID int64) ([]Supplier, error) {
+    const q = `SELECT * FROM suppliers WHERE user_id = $1`
+    rows, _ := m.DB.Query(ctx, q, organizationID)
+    // ...
+}
+```
+
+**Creación de Usuarios por Admin:**
+```go
+// CreateUserByAdmin - el vendedor hereda organization_id del admin
+func CreateUserByAdmin(db *pgxpool.Pool) http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        // Obtener organization_id del admin que está creando el usuario
+        adminOrgID, ok := middleware.OrganizationIDFromContext(r.Context())
+        if !ok {
+            http.Error(w, "unauthorized", http.StatusUnauthorized)
+            return
+        }
+        
+        var input CreateUserInput
+        json.NewDecoder(r.Body).Decode(&input)
+        
+        newUser := &models.User{
+            Name:           input.Name,
+            Email:          input.Email,
+            PasswordHash:   hashPassword(input.Password),
+            Role:           input.Role,  // "vendedor" o "repositor"
+            OrganizationID: adminOrgID,  // ⭐ Hereda del admin
+        }
+        
+        userModel.Insert(newUser)
+        // ...
+    }
+}
+```
+
+**Registro Público (cada uno su organización):**
+```go
+// RegisterUser - cada registro público crea un admin independiente
+func RegisterUser(store userInserter) http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        var input RegisterUserInput
+        json.NewDecoder(r.Body).Decode(&input)
+        
+        // Registro público SIEMPRE crea admins
+        user := &models.User{
+            Name:           input.Name,
+            Email:          input.Email,
+            PasswordHash:   hashPassword(input.Password),
+            Role:           "admin",        // ⭐ Forzado a admin
+            OrganizationID: 0,              // Se auto-asigna en Insert()
+        }
+        
+        store.Insert(user)
+        // Insert() detecta role=admin y hace: organization_id = user.ID
+        // ...
+    }
+}
+```
+
+**Insert() con Auto-Asignación:**
+```go
+func (m *UserModel) Insert(user *User) error {
+    tx, _ := m.DB.Begin(ctx)
+    defer tx.Rollback(ctx)
+    
+    // Convertir organization_id=0 a NULL para la base de datos
+    var orgID interface{}
+    if user.OrganizationID == 0 {
+        orgID = nil
+    } else {
+        orgID = user.OrganizationID
+    }
+    
+    // Insertar usuario
+    const q = `INSERT INTO users (name, email, password_hash, role, organization_id)
+               VALUES ($1, $2, $3, $4, $5)
+               RETURNING id, created_at`
+    var id int64
+    err := tx.QueryRow(ctx, q, user.Name, user.Email, user.PasswordHash, 
+                       user.Role, orgID).Scan(&id, &createdAt)
+    
+    user.ID = id
+    
+    // Si es admin y no tiene organization_id, auto-asignarse
+    if user.Role == "admin" && user.OrganizationID == 0 {
+        const qUpdate = `UPDATE users SET organization_id = $1 WHERE id = $1`
+        tx.Exec(ctx, qUpdate, id)
+        user.OrganizationID = id  // ⭐ El admin es su propia organización
+    }
+    
+    tx.Commit(ctx)
+    return nil
+}
+```
+
+**Handlers Actualizados (18+):**
+- ✅ `product_handlers.go` - 7 funciones
+- ✅ `customer_handlers.go` - 6 funciones
+- ✅ `supplier_handlers.go` - 6 funciones
+- ✅ `sales_order_handlers.go` - 5 funciones
+- ✅ `purchase_order_handlers.go` - 5 funciones
+- ✅ `dashboard_handlers.go` - 3 funciones ⭐ (fix crítico)
+- ✅ `report_handlers.go` - 3 funciones
+- ✅ `audit_handlers.go` - 1 función
+- ✅ `integration_handlers.go` - 3 funciones
+- ✅ `subscription_handlers.go` - ya usa user_id (correcto)
+- ✅ `user_handlers.go` - CreateUserByAdmin, RegisterUser
+
+**Fix del Dashboard (Bug Crítico):**
+```go
+// ANTES (incorrecto - usaba UserIDFromContext)
+func GetDashboardKPIs(db *pgxpool.Pool) http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        organizationID, _ := middleware.UserIDFromContext(r.Context())  // ❌
+        // ...
+    }
+}
+
+// DESPUÉS (correcto - usa OrganizationIDFromContext)
+func GetDashboardKPIs(db *pgxpool.Pool) http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        organizationID, _ := middleware.OrganizationIDFromContext(r.Context())  // ✅
+        dm := &models.DashboardModel{DB: db}
+        kpis, _ := dm.GetDashboardKPIs(organizationID)
+        // ...
+    }
+}
+```
+
+**Verificación en Producción:**
+```sql
+-- Estado de usuarios
+SELECT id, email, role, organization_id FROM users ORDER BY id;
+
+-- Resultado:
+-- 5  | francoleproso1@gmail.com    | admin    | 5  ✅
+-- 11 | vendedor@test.com           | vendedor | 5  ✅
+-- 12 | mellimacifranco@gmail.com   | vendedor | 5  ✅
+-- 13 | prueba@example.com          | vendedor | 5  ✅
+-- 14 | pruebaregistro@gmail.com    | admin    | 14 ✅
+
+-- Productos por organización
+SELECT user_id, COUNT(*) as total FROM products GROUP BY user_id;
+
+-- Resultado:
+-- 5  | 15  ✅ (admin principal)
+-- 14 | 0   ✅ (admin nuevo, organización vacía)
+
+-- Verificar que vendedores ven productos del admin
+SELECT 
+    u.id as user_id,
+    u.email,
+    u.organization_id,
+    COUNT(p.id) as products_visible
+FROM users u
+LEFT JOIN products p ON p.user_id = u.organization_id
+WHERE u.organization_id IS NOT NULL
+GROUP BY u.id, u.email, u.organization_id;
+
+-- Resultado:
+-- 5  | francoleproso1@gmail.com  | 5  | 15  ✅
+-- 11 | vendedor@test.com         | 5  | 15  ✅
+-- 12 | mellimacifranco@gmail.com | 5  | 15  ✅
+-- 13 | prueba@example.com        | 5  | 15  ✅
+-- 14 | pruebaregistro@gmail.com  | 14 | 0   ✅
+```
+
+**Logs de Debug:**
+```json
+// Login exitoso con organization_id
+{
+  "time": "2025-11-20T21:25:52Z",
+  "level": "INFO",
+  "msg": "JWT Middleware",
+  "user_id": 5,
+  "email": "francoleproso1@gmail.com",
+  "role": "admin",
+  "organization_id": 5,  // ⭐
+  "path": "/api/v1/products"
+}
+
+// ListProducts con organization_id correcto
+{
+  "time": "2025-11-20T21:25:52Z",
+  "level": "INFO",
+  "msg": "ListProducts called",
+  "organizationID": 5  // ⭐
+}
+
+// Resultado: 15 productos
+{
+  "time": "2025-11-20T21:25:52Z",
+  "level": "INFO",
+  "msg": "ListProducts result",
+  "organizationID": 5,
+  "count": 15  // ✅
+}
+```
+
+**Garantías del Sistema:**
+- ✅ Admins tienen su propia organización (organization_id = su ID)
+- ✅ Vendedores/Repositores heredan organization_id del admin que los creó
+- ✅ Cada organización ve solo sus datos (productos, clientes, proveedores)
+- ✅ JWT incluye organization_id para autenticación stateless
+- ✅ Middleware inyecta organization_id en contexto de cada request
+- ✅ Todos los handlers usan OrganizationIDFromContext()
+- ✅ Dashboard muestra métricas correctas por organización
+- ✅ Migraciones aplicadas sin pérdida de datos
+- ✅ Sistema multi-tenant 100% funcional
+
+---
+
+### **14. Gestión de Usuarios con Organizaciones**
+
+**Endpoints:**
+```
+POST /api/v1/auth/register          - Registro público (crea admin)
+POST /api/v1/auth/login             - Login (genera JWT con organization_id)
+POST /api/v1/admin/users            - Admin crea vendedor/repositor
+GET  /api/v1/admin/users            - Listar usuarios de la organización
+PUT  /api/v1/admin/users/:id        - Actualizar usuario
+DELETE /api/v1/admin/users/:id      - Eliminar usuario
+```
+
+**Flujos de Usuario:**
+
+1. **Registro Público:**
+```
+Usuario → POST /auth/register
+  ↓
+Backend crea user con role="admin"
+  ↓
+Insert() auto-asigna organization_id = user.ID
+  ↓
+Usuario tiene su propia organización vacía
+```
+
+2. **Admin Crea Vendedor:**
+```
+Admin (org_id=5) → POST /admin/users {role: "vendedor"}
+  ↓
+Backend extrae organization_id=5 del JWT del admin
+  ↓
+Crea vendedor con organization_id=5
+  ↓
+Vendedor puede ver los 15 productos del admin
+```
+
+3. **Login de Vendedor:**
+```
+Vendedor → POST /auth/login
+  ↓
+Backend busca user en BD (organization_id=5)
+  ↓
+Genera JWT con organization_id=5
+  ↓
+Frontend recibe token
+  ↓
+Todas las peticiones filtran por organization_id=5
+  ↓
+Ve productos, clientes, proveedores del admin
+```
+
+---
+
+### **15. Sistema de Suscripciones y Pagos**
 
 **Tecnologías:**
 - MercadoPago API (Payment Gateway)
@@ -1333,7 +1750,7 @@ r.Post("/integrations", RequireActiveSubscription(RequirePlanFeature("integratio
 
 ---
 
-### **15. Frontend de Suscripciones (La Vidriera)**
+### **16. Paywall Middleware (Patovica)**
 
 **Tecnologías:**
 - React 18
@@ -1587,7 +2004,7 @@ api.interceptors.response.use(
 
 ---
 
-### **16. Seguridad en Webhooks**
+### **17. Frontend de Suscripciones (La Vidriera)**
 
 **Tecnología:** HMAC-SHA256
 
@@ -1684,7 +2101,7 @@ func HandleMercadoPagoWebhook(w http.ResponseWriter, r *http.Request) {
 
 ---
 
-### **17. Base de Datos de Suscripciones**
+### **18. Seguridad en Webhooks**
 
 **Tablas Nuevas:**
 
@@ -1765,70 +2182,73 @@ GROUP BY plan_type, status;
 
 ## 🎯 Funcionalidades Destacadas (Actualizado)
 
-### **Top 15 Features**
+### **Top 16 Features**
 
-1. **Sistema de Lotes con FEFO** ⭐⭐⭐
+1. **Sistema Multi-Tenant con Organizaciones** ⭐⭐⭐ **[NUEVO - Nov 2025]**
+   - Admins con su propia organización
+   - Vendedores/Repositores comparten inventario del admin
+   - Aislamiento completo de datos entre organizaciones
+   - Migración completa sin pérdida de datos
+
+2. **Sistema de Lotes con FEFO** ⭐⭐⭐
    - Minimiza pérdidas por vencimiento
    - Trazabilidad completa
    - Cumplimiento normativo
 
-2. **Sistema de Suscripciones Multi-Plan** ⭐⭐⭐ **[NUEVO]**
+3. **Sistema de Suscripciones Multi-Plan** ⭐⭐⭐
    - 3 planes configurables
    - Integración MercadoPago
    - Renovación automática
    - Webhooks seguros
 
-3. **Paywall Middleware Inteligente** ⭐⭐⭐ **[NUEVO]**
+4. **Paywall Middleware Inteligente** ⭐⭐⭐
    - 42 endpoints protegidos
    - Validación de límites por plan
    - Respuestas 402 personalizadas
    - Verificación de features
 
-4. **Frontend de Suscripciones** ⭐⭐ **[NUEVO]**
+5. **Frontend de Suscripciones** ⭐⭐
    - Página de precios moderna
    - Dashboard de facturación
    - Auto-redirect en 402
    - Gestión completa
 
-5. **Autenticación JWT + RBAC**
+6. **Autenticación JWT + RBAC**
    - 3 roles configurables
    - Seguridad multicapa
    - Tokens con expiración
+   - Organization ID en JWT
 
-6. **Transacciones ACID con Locks**
+7. **Transacciones ACID con Locks**
    - Previene stock negativo
    - Seguridad en concurrencia
    - FOR UPDATE locks
 
-7. **Webhooks Seguros** ⭐⭐ **[NUEVO]**
+8. **Webhooks Seguros** ⭐⭐
    - Verificación HMAC-SHA256
    - Procesamiento idempotente
    - Respuesta rápida (<2s)
 
-8. **Auditoría Completa**
+9. **Auditoría Completa**
    - Log de todas las operaciones
    - Trazabilidad de cambios
    - IP tracking
 
-9. **Sistema de Notificaciones**
-   - Emails asíncronos
-   - RabbitMQ queue
-   - SendGrid integration
+10. **Sistema de Notificaciones**
+    - Emails asíncronos
+    - RabbitMQ queue
+    - SendGrid integration
 
-10. **Reportes y Exportación**
+11. **Reportes y Exportación**
     - CSV on-demand
     - Filtros avanzados
     - Datos completos
 
-11. **Dashboard con KPIs**
+12. **Dashboard con KPIs**
     - Métricas en tiempo real
     - Stock bajo automático
     - Visualización clara
-
-12. **Multitenancy**
-    - Datos aislados por usuario
-    - Escalabilidad
-    - Sin contaminación
+    - Filtrado por organización
 
 13. **Logging Estructurado**
     - JSON output
@@ -1840,10 +2260,15 @@ GROUP BY plan_type, status;
     - API keys seguras
     - Credenciales protegidas
 
-15. **Límites por Plan Dinámicos** ⭐ **[NUEVO]**
+15. **Límites por Plan Dinámicos** ⭐
     - Productos máximos
     - Órdenes mensuales
     - Features condicionales
+
+16. **Gestión de Usuarios Multi-Organización** ⭐ **[NUEVO]**
+    - Admins pueden crear vendedores/repositores
+    - Compartición automática de inventario
+    - Permisos heredados por organización
 
 ---
 
@@ -1863,9 +2288,11 @@ GROUP BY plan_type, status;
 | **TAREA_4_PATOVICA_COMPLETADA.md** | 20 | Middleware de Paywall |
 | **TAREA_5_VIDRIERA_COMPLETADA.md** | 25 | Frontend de suscripciones |
 | **RESUMEN_TAREA_5.md** | 8 | Resumen ejecutivo Tarea 5 |
-| **IMPLEMENTACIONES.md** | 30 | Este documento |
+| **BUG_FIXES_ORDENES_COMPRA.md** | 10 | Fixes en órdenes de compra |
+| **TAREA-3-DELEGACION.md** | 15 | Sistema multi-tenant con organizaciones |
+| **IMPLEMENTACIONES.md** | 35 | Este documento |
 
-**Total:** ~193 páginas de documentación técnica
+**Total:** ~218 páginas de documentación técnica
 
 ---
 
@@ -1978,21 +2405,21 @@ GROUP BY plan_type, status;
 
 | Lenguaje | % Uso | Propósito |
 |----------|-------|-----------|
-| **Go** | 55% | Backend completo (API + Suscripciones + Worker) |
-| **TypeScript** | 30% | Frontend (Dashboard + Pricing + Billing) |
-| **SQL** | 10% | Base de datos |
+| **Go** | 55% | Backend completo (API + Multi-Tenant + Suscripciones + Worker) |
+| **TypeScript** | 30% | Frontend (Dashboard + Pricing + Billing + Organizations) |
+| **SQL** | 10% | Base de datos (17 migraciones) |
 | **Bash** | 3% | Scripts |
 | **Markdown** | 2% | Documentación |
 
 ### **Líneas de Código (Estimado)**
 
 ```
-Backend (Go):        ~7,500 líneas  (+2,500 suscripciones)
+Backend (Go):        ~7,500 líneas  (+2,500 suscripciones +500 multi-tenant)
 Frontend (TS/TSX):   ~4,500 líneas  (+1,500 pricing/billing)
-SQL Migrations:      ~1,200 líneas  (+200 subscriptions)
-Documentación:       ~12,000 líneas (+4,000 nuevas tareas)
-──────────────────────────────────────────────────────────
-Total:               ~25,200 líneas (+8,200 nuevas)
+SQL Migrations:      ~1,200 líneas  (+200 subscriptions +100 organizations)
+Documentación:       ~12,000 líneas (+4,000 nuevas tareas +500 multi-tenant)
+──────────────────────────────────────────────────────────────────────────────
+Total:               ~26,300 líneas (+9,300 nuevas desde inicio)
 ```
 
 ### **Complejidad del Proyecto**
@@ -2010,28 +2437,34 @@ Total:               ~25,200 líneas (+8,200 nuevas)
 ### **Técnicos**
 - ✅ Arquitectura de microservicios funcional
 - ✅ Sistema de lotes con FEFO implementado desde cero
-- ✅ **Sistema de Suscripciones Multi-Plan** **[NUEVO]**
-- ✅ **Integración con MercadoPago** (checkout + webhooks) **[NUEVO]**
-- ✅ **Paywall Middleware** (42 rutas protegidas) **[NUEVO]**
-- ✅ **Frontend de Pagos** (2 páginas nuevas) **[NUEVO]**
-- ✅ **Webhooks Seguros** con verificación HMAC **[NUEVO]**
+- ✅ **Sistema Multi-Tenant con Organizaciones** ⭐ **[NUEVO - Nov 2025]**
+- ✅ **Sistema de Suscripciones Multi-Plan**
+- ✅ **Integración con MercadoPago** (checkout + webhooks)
+- ✅ **Paywall Middleware** (42 rutas protegidas)
+- ✅ **Frontend de Pagos** (2 páginas nuevas)
+- ✅ **Webhooks Seguros** con verificación HMAC
 - ✅ Transacciones ACID con locks avanzados
 - ✅ Encriptación de datos sensibles
 - ✅ Logging estructurado completo
-- ✅ 15 migraciones de base de datos
-- ✅ Multitenancy robusto
+- ✅ **17 migraciones de base de datos** (incluyendo organizaciones)
+- ✅ **JWT con organization_id** en claims
+- ✅ **18+ handlers actualizados** para multi-tenant
 - ✅ RBAC con 3 roles
+- ✅ **Compartición automática de inventario** entre usuarios de una organización
 
 ### **De Negocio**
 - ✅ Trazabilidad completa de inventario
-- ✅ **Monetización con planes de suscripción** **[NUEVO]**
-- ✅ **Límites configurables por plan** **[NUEVO]**
-- ✅ **Pasarela de pagos integrada** **[NUEVO]**
+- ✅ **Sistema de equipos de trabajo** (admins + vendedores/repositores) ⭐ **[NUEVO]**
+- ✅ **Monetización con planes de suscripción**
+- ✅ **Límites configurables por plan**
+- ✅ **Pasarela de pagos integrada**
+- ✅ **Compartición de inventario** entre usuarios de una organización ⭐
+- ✅ **Aislamiento completo** entre organizaciones diferentes ⭐
 - ✅ Minimización de pérdidas por vencimiento
 - ✅ Cumplimiento de normativas sanitarias
 - ✅ Reportes exportables
 - ✅ Sistema de alertas automático
-- ✅ Dashboard con KPIs
+- ✅ Dashboard con KPIs por organización
 
 ### **Operacionales**
 - ✅ Zero downtime en migraciones
@@ -2047,28 +2480,33 @@ Total:               ~25,200 líneas (+8,200 nuevas)
 **Stock In Order** es un sistema de gestión de inventario de **nivel empresarial** que implementa:
 
 - ✅ **15+ tecnologías** principales
-- ✅ **17 módulos funcionales** completos
-- ✅ **13 tablas** de base de datos optimizadas
+- ✅ **19 módulos funcionales** completos (incluyendo multi-tenant)
+- ✅ **14 tablas** de base de datos optimizadas
 - ✅ **50+ endpoints** REST API
 - ✅ **3 servicios** backend (API, Worker, Scheduler)
+- ✅ **Sistema Multi-Tenant** con organizaciones ⭐ **[NUEVO]**
 - ✅ **Sistema de Suscripciones** con MercadoPago
 - ✅ **Paywall Middleware** (42 rutas protegidas)
 - ✅ **Frontend de Pagos** (PricingPage + BillingPage)
 - ✅ **Webhooks Seguros** con HMAC-SHA256
 - ✅ **FEFO Algorithm** para rotación óptima
-- ✅ **RBAC** con autenticación JWT
+- ✅ **RBAC** con autenticación JWT (incluye organization_id)
 - ✅ **Auditoría** completa de operaciones
 - ✅ **Transacciones ACID** con locks
-- ✅ **Documentación** de 193+ páginas
+- ✅ **Documentación** de 218+ páginas
 
 El proyecto está **listo para producción** y preparado para escalar.
 
 ---
 
 **Autor:** Stock In Order Team  
-**Versión del Documento:** 2.0 *(Actualizado con Sistema de Suscripciones)*  
-**Fecha:** 6 de Noviembre, 2025  
+**Versión del Documento:** 3.0 *(Actualizado con Sistema Multi-Tenant)*  
+**Fecha:** 22 de Noviembre, 2025  
 **Estado del Proyecto:** ✅ EN PRODUCCIÓN
+
+---
+
+### **19. Base de Datos de Suscripciones**
 
 ---
 

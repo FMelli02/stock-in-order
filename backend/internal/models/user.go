@@ -55,7 +55,15 @@ func (m *UserModel) Insert(user *User) error {
 		role = "vendedor"
 	}
 
-	err = tx.QueryRow(ctx, qUser, user.Name, user.Email, user.PasswordHash, role, user.OrganizationID).Scan(&id, &createdAt)
+	// Convertir organization_id=0 a NULL para la base de datos
+	var orgID interface{}
+	if user.OrganizationID == 0 {
+		orgID = nil
+	} else {
+		orgID = user.OrganizationID
+	}
+
+	err = tx.QueryRow(ctx, qUser, user.Name, user.Email, user.PasswordHash, role, orgID).Scan(&id, &createdAt)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" { // unique_violation

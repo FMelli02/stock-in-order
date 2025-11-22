@@ -103,7 +103,10 @@ func JWTMiddleware(next http.Handler, jwtSecret string) http.Handler {
 		default:
 			// Si no hay organization_id en el token, usar el user_id (para admins)
 			orgID = uid
+			slog.Warn("No organization_id in JWT token, using user_id as fallback", "user_id", uid, "email", email)
 		}
+
+		slog.Info("JWT Middleware", "user_id", uid, "email", email, "role", role, "organization_id", orgID, "path", r.URL.Path)
 
 		// Inject user_id, email, role, and organization_id into context
 		ctx := context.WithValue(r.Context(), userIDKey, uid)

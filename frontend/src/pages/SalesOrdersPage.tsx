@@ -2,10 +2,32 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'react-hot-toast'
 import api from '../services/api'
+import PaginationControls from '../components/PaginationControls'
 import type { SalesOrder } from '../types/salesOrder'
+
+interface PaginationMetadata {
+  current_page: number
+  page_size: number
+  first_page: number
+  last_page: number
+  total_records: number
+}
+
+interface PaginatedResponse {
+  items: SalesOrder[]
+  metadata: PaginationMetadata
+}
 
 export default function SalesOrdersPage() {
   const [orders, setOrders] = useState<SalesOrder[]>([])
+  const [metadata, setMetadata] = useState<PaginationMetadata>({
+    current_page: 1,
+    page_size: 20,
+    first_page: 1,
+    last_page: 1,
+    total_records: 0
+  })
+  const [, setCurrentPage] = useState<number>(1)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   
@@ -14,24 +36,27 @@ export default function SalesOrdersPage() {
   const [filterDateTo, setFilterDateTo] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
 
+  const fetchOrders = async (page: number = 1) => {
+    try {
+      setLoading(true)
+      const res = await api.get<PaginatedResponse>(`/sales-orders?page=${page}&page_size=20`)
+      setOrders(res.data.items)
+      setMetadata(res.data.metadata)
+      setCurrentPage(page)
+    } catch (e) {
+      console.error(e)
+      setError('No se pudieron cargar las órdenes')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handlePageChange = (page: number) => {
+    fetchOrders(page)
+  }
+
   useEffect(() => {
-    let mounted = true
-    const fetchOrders = async () => {
-      try {
-        setLoading(true)
-        const res = await api.get<SalesOrder[]>('/sales-orders')
-        if (mounted) setOrders(res.data)
-      } catch (e) {
-        console.error(e)
-        if (mounted) setError('No se pudieron cargar las órdenes')
-      } finally {
-        if (mounted) setLoading(false)
-      }
-    }
     fetchOrders()
-    return () => {
-      mounted = false
-    }
   }, [])
 
   const handleExportExcel = async () => {
@@ -163,6 +188,11 @@ export default function SalesOrdersPage() {
               )}
             </tbody>
           </table>
+
+          <PaginationControls 
+            metadata={metadata} 
+            onPageChange={handlePageChange} 
+          />
         </div>
       )}
     </div>

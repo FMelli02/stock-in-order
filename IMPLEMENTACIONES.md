@@ -12,13 +12,15 @@
 - Gestión de productos, clientes, proveedores
 - Órdenes de compra y venta con sistema de lotes
 - Trazabilidad completa con lógica FEFO
-- **Sistema multi-tenant con organizaciones** ⭐ **[NUEVO]**
+- **Sistema multi-tenant con organizaciones** ⭐
 - Autenticación JWT con RBAC
+- **Recuperación de contraseña por email** ⭐ **[NUEVO]**
+- **Validación preventiva de stock** ⭐ **[NUEVO]**
 - Auditoría de operaciones
 - Integración con servicios externos
 - Sistema de reportes y exportación
-- Notificaciones por email
-- **Sistema de suscripciones con MercadoPago** ⭐ **[NUEVO]**
+- Notificaciones por email con SendGrid
+- **Sistema de suscripciones con MercadoPago** ⭐
 - Monitoreo y logging estructurado
 
 ---
@@ -841,7 +843,8 @@ users (1) ─── (N) audit_logs
 | 000014 | `add_batch_fields_to_purchase_items` | Campos de lote en compras ⭐ |
 | 000015 | `create_subscriptions_table` | **Tabla de suscripciones** ⭐ |
 | 000016 | `add_plan_id_to_subscriptions` | Plan ID y features adicionales |
-| 000017 | `add_organization_id_to_users` | **Sistema multi-tenant** ⭐ **[NUEVO]** |
+| 000017 | `add_organization_id_to_users` | **Sistema multi-tenant** ⭐ |
+| 000019 | `create_password_tokens` | **Recuperación de contraseña** ⭐ **[NUEVO]** |
 
 ---
 
@@ -2524,6 +2527,508 @@ El proyecto está **listo para producción** y preparado para escalar.
 - [REST API Design](https://restfulapi.net/)
 - [Database Indexing](https://use-the-index-luke.com/)
 - [JWT Best Practices](https://tools.ietf.org/html/rfc8725)
+
+---
+
+### **20. Sistema de Recuperación de Contraseña**
+
+**Tecnologías:**
+- Go (backend handlers)
+- SendGrid (email delivery)
+- SHA256 (token hashing)
+- React (frontend)
+
+**Funcionalidades:**
+- ✅ Solicitud de recuperación por email
+- ✅ Tokens temporales con expiry de 1 hora
+- ✅ Enlaces seguros con token hasheado
+- ✅ Email HTML profesional con SendGrid
+- ✅ Validación y actualización de contraseña
+
+**Tabla de Tokens:**
+```sql
+CREATE TABLE password_tokens (
+    hash TEXT PRIMARY KEY,              -- SHA256 del token (64 chars)
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    expiry TIMESTAMPTZ NOT NULL,        -- Válido por 1 hora
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_password_tokens_user_id ON password_tokens(user_id);
+CREATE INDEX idx_password_tokens_expiry ON password_tokens(expiry);
+```
+
+**Endpoints:**
+```
+POST /api/v1/users/forgot-password  - Solicitar recuperación
+PUT  /api/v1/users/reset-password   - Restablecer contraseña
+```
+
+**Implementación Backend:**
+```go
+// ForgotPassword - Genera token y envía email
+func ForgotPassword(db *pgxpool.Pool, emailService *services.EmailService) http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        var input struct {
+            Email string `json:"email"`
+        }
+        json.NewDecoder(r.Body).Decode(&input)
+        
+        // Buscar usuario
+        user, _ := userModel.GetByEmail(input.Email)
+        if user == nil {
+            // SEGURIDAD: Siempre retornar 200 (no revelar si email existe)
+            w.WriteHeader(http.StatusOK)
+            return
+        }
+        
+        // Generar token aleatorio (32 bytes)
+        tokenBytes := make([]byte, 32)
+        rand.Read(tokenBytes)
+        plainToken := hex.EncodeToString(tokenBytes)  // 64 chars
+        
+        // Hashear para almacenar (SHA256)
+        hash := sha256.Sum256([]byte(plainToken))
+        tokenHash := hex.EncodeToString(hash[:])
+        
+        // Guardar en DB con expiry de 1 hora
+        expiry := time.Now().Add(1 * time.Hour)
+        _, _ = db.Exec(ctx, 
+            `INSERT INTO password_tokens (hash, user_id, expiry) VALUES ($1, $2, $3)`,
+            tokenHash, user.ID, expiry)
+        
+        // Enviar email con token en plain text
+        emailService.SendPasswordResetEmail(user.Email, map[string]string{
+            "UserName": user.Name,
+            "Token":    plainToken,  // Token sin hashear en el email
+        })
+        
+        w.WriteHeader(http.StatusOK)
+    }
+}
+
+// ResetPassword - Valida token y actualiza contraseña
+func ResetPassword(db *pgxpool.Pool) http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        var input struct {
+            Token       string `json:"token"`
+            NewPassword string `json:"new_password"`
+        }
+        json.NewDecoder(r.Body).Decode(&input)
+        
+        // Hashear token recibido
+        hash := sha256.Sum256([]byte(input.Token))
+        tokenHash := hex.EncodeToString(hash[:])
+        
+        // Buscar token en DB
+        var userID int64
+        var expiry time.Time
+        err := db.QueryRow(ctx,
+            `SELECT user_id, expiry FROM password_tokens WHERE hash = $1`,
+            tokenHash).Scan(&userID, &expiry)
+        
+        if err != nil {
+            http.Error(w, "Token inválido o expirado", http.StatusBadRequest)
+            return
+        }
+        
+        // Verificar expiry
+        if time.Now().After(expiry) {
+            http.Error(w, "Token expirado", http.StatusBadRequest)
+            return
+        }
+        
+        // Actualizar contraseña (bcrypt)
+        hashedPassword, _ := bcrypt.GenerateFromPassword(
+            []byte(input.NewPassword), bcrypt.DefaultCost)
+        _, _ = db.Exec(ctx,
+            `UPDATE users SET password_hash = $1 WHERE id = $2`,
+            hashedPassword, userID)
+        
+        // Eliminar token usado
+        _, _ = db.Exec(ctx, `DELETE FROM password_tokens WHERE hash = $1`, tokenHash)
+        
+        w.WriteHeader(http.StatusOK)
+    }
+}
+```
+
+**Email Service (SendGrid):**
+```go
+type EmailService struct {
+    apiKey    string
+    fromEmail string
+    fromName  string
+}
+
+func (s *EmailService) SendPasswordResetEmail(toEmail string, data map[string]string) error {
+    from := mail.NewEmail(s.fromName, s.fromEmail)
+    to := mail.NewEmail("", toEmail)
+    subject := "Recuperación de Contraseña - Stock In Order"
+    
+    // HTML con botón de reset
+    htmlContent := fmt.Sprintf(`
+        <h2>Hola %s,</h2>
+        <p>Recibimos una solicitud para restablecer tu contraseña.</p>
+        <p>Haz clic en el siguiente botón para crear una nueva contraseña:</p>
+        <a href="http://localhost:5173/reset-password?token=%s" 
+           style="display:inline-block;padding:12px 24px;background:#4F46E5;color:white;">
+            Restablecer Contraseña
+        </a>
+        <p>Este enlace expirará en 1 hora.</p>
+        <p>Si no solicitaste este cambio, ignora este correo.</p>
+    `, data["UserName"], data["Token"])
+    
+    message := mail.NewSingleEmail(from, subject, to, "", htmlContent)
+    client := sendgrid.NewSendClient(s.apiKey)
+    _, err := client.Send(message)
+    return err
+}
+```
+
+**Frontend - Página de Solicitud:**
+```tsx
+// ForgotPasswordPage.tsx
+export default function ForgotPasswordPage() {
+  const [email, setEmail] = useState('')
+  const [success, setSuccess] = useState(false)
+  
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    await api.post('/users/forgot-password', { email })
+    setSuccess(true)
+  }
+  
+  if (success) {
+    return (
+      <div>
+        <h2>✉️ Revisa tu email</h2>
+        <p>Si existe una cuenta con ese correo, recibirás un enlace 
+           para restablecer tu contraseña.</p>
+        <p>El enlace expirará en 1 hora.</p>
+        <p>⚠️ Revisa tu carpeta de spam si no lo ves.</p>
+      </div>
+    )
+  }
+  
+  return (
+    <form onSubmit={handleSubmit}>
+      <input 
+        type="email" 
+        value={email} 
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="tu@email.com"
+      />
+      <button type="submit">Enviar enlace de recuperación</button>
+    </form>
+  )
+}
+```
+
+**Frontend - Página de Reset:**
+```tsx
+// ResetPasswordPage.tsx
+export default function ResetPasswordPage() {
+  const [searchParams] = useSearchParams()
+  const token = searchParams.get('token')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    
+    if (newPassword !== confirmPassword) {
+      toast.error('Las contraseñas no coinciden')
+      return
+    }
+    
+    try {
+      await api.put('/users/reset-password', { 
+        token, 
+        new_password: newPassword 
+      })
+      toast.success('Contraseña restablecida correctamente!')
+      navigate('/login')
+    } catch (err) {
+      toast.error('Token inválido o expirado')
+    }
+  }
+  
+  return (
+    <form onSubmit={handleSubmit}>
+      <input 
+        type="password" 
+        value={newPassword}
+        onChange={(e) => setNewPassword(e.target.value)}
+        placeholder="Nueva contraseña"
+      />
+      <input 
+        type="password"
+        value={confirmPassword}
+        onChange={(e) => setConfirmPassword(e.target.value)}
+        placeholder="Confirmar contraseña"
+      />
+      <button type="submit">Restablecer contraseña</button>
+    </form>
+  )
+}
+```
+
+**Flujo Completo:**
+```
+1. Usuario en /login → Click "¿Olvidaste tu contraseña?"
+2. /forgot-password → Ingresa email → POST /users/forgot-password
+3. Backend genera token → SHA256 hash → Guarda en DB
+4. SendGrid envía email con link: /reset-password?token=xxx
+5. Usuario hace clic → /reset-password carga con token en URL
+6. Ingresa nueva contraseña → PUT /users/reset-password
+7. Backend valida hash → Actualiza password → Elimina token
+8. Redirect a /login → ¡Listo!
+```
+
+**Seguridad Implementada:**
+- ✅ Token hasheado con SHA256 (nunca se almacena en plain text)
+- ✅ Expiry de 1 hora (se valida en cada uso)
+- ✅ Token de un solo uso (se elimina después de usar)
+- ✅ Siempre retorna 200 en forgot-password (no revela si email existe)
+- ✅ Password hasheada con bcrypt al actualizar
+- ✅ HTTPS requerido en producción
+
+**Variables de Entorno:**
+```env
+SENDGRID_API_KEY=SG.xxxxx                    # Requerido
+SENDGRID_FROM_EMAIL=noreply@example.com      # Opcional
+SENDGRID_FROM_NAME=Stock In Order            # Opcional
+```
+
+---
+
+### **21. Validación Previa de Stock (Anti-Papelón)**
+
+**Tecnologías:**
+- PostgreSQL (queries agregadas)
+- Go (validación pre-transaccional)
+- TypeScript (manejo de errores)
+
+**Problema Resuelto:**
+- ❌ ANTES: Transacción iniciada → FEFO falla → Rollback → Error genérico
+- ✅ AHORA: Validación rápida → Si falla, no inicia TX → Error detallado
+
+**Funcionalidades:**
+- ✅ Validación de stock ANTES de la transacción
+- ✅ Errores detallados con nombre de producto
+- ✅ Query optimizada con SUM agregado
+- ✅ Toast informativo en frontend
+- ✅ Logs estructurados para debugging
+
+**Error Personalizado:**
+```go
+type InsufficientStockError struct {
+    ProductID   int64  `json:"product_id"`
+    ProductName string `json:"product_name"`
+    Requested   int    `json:"requested"`
+    Available   int    `json:"available"`
+}
+
+func (e *InsufficientStockError) Error() string {
+    return fmt.Sprintf(
+        "insufficient stock for product %s (ID: %d): requested %d, available %d",
+        e.ProductName, e.ProductID, e.Requested, e.Available)
+}
+```
+
+**Validación Pre-Transaccional:**
+```go
+// ValidateStockAvailability - Se ejecuta ANTES de tx.Begin()
+func (m *SalesOrderModel) ValidateStockAvailability(items []OrderItem, userID int64) error {
+    for _, item := range items {
+        // Query optimizada: SUM agregado en lugar de iterar lotes
+        const qTotalStock = `
+            SELECT COALESCE(SUM(pb.quantity), 0), p.name
+            FROM product_batches pb
+            JOIN products p ON pb.product_id = p.id
+            WHERE pb.product_id = $1 AND pb.user_id = $2 AND pb.quantity > 0
+            GROUP BY p.name`
+        
+        var availableStock int
+        var productName string
+        err := m.DB.QueryRow(ctx, qTotalStock, item.ProductID, userID).
+            Scan(&availableStock, &productName)
+        
+        if err == pgx.ErrNoRows {
+            // Sin lotes = stock 0
+            productName = getProductName(item.ProductID, userID)
+            return &InsufficientStockError{
+                ProductID:   item.ProductID,
+                ProductName: productName,
+                Requested:   item.Quantity,
+                Available:   0,
+            }
+        }
+        
+        // Validar suficiencia
+        if availableStock < item.Quantity {
+            slog.Warn("Insufficient stock detected",
+                "product", productName,
+                "requested", item.Quantity,
+                "available", availableStock)
+            
+            return &InsufficientStockError{
+                ProductID:   item.ProductID,
+                ProductName: productName,
+                Requested:   item.Quantity,
+                Available:   availableStock,
+            }
+        }
+        
+        slog.Info("Stock validation passed", 
+            "product", productName,
+            "requested", item.Quantity,
+            "available", availableStock)
+    }
+    
+    return nil
+}
+```
+
+**Integración en Create:**
+```go
+func (m *SalesOrderModel) Create(order *SalesOrder, items []OrderItem) error {
+    // ⭐ CRÍTICO: Validar ANTES de iniciar transacción
+    if err := m.ValidateStockAvailability(items, order.UserID); err != nil {
+        slog.Error("Stock validation failed", "error", err)
+        return err  // Return inmediato, sin TX
+    }
+    
+    slog.Info("Stock validation passed, starting transaction")
+    
+    // Ahora sí, iniciar transacción (sabemos que hay stock)
+    tx, err := m.DB.Begin(ctx)
+    if err != nil {
+        return err
+    }
+    defer tx.Rollback(ctx)
+    
+    // Insertar orden...
+    // ConsumeStockFEFO...
+    // Commit...
+}
+```
+
+**Handler con Detección de Error:**
+```go
+func CreateSalesOrder(db *pgxpool.Pool) http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        // ... parsear input ...
+        
+        som := &models.SalesOrderModel{DB: db}
+        if err := som.Create(order, items); err != nil {
+            // Detectar error específico de stock
+            if stockErr, ok := err.(*models.InsufficientStockError); ok {
+                w.WriteHeader(http.StatusConflict)  // 409
+                json.NewEncoder(w).Encode(map[string]any{
+                    "error":        "insufficient_stock",
+                    "message":      stockErr.Error(),
+                    "product_id":   stockErr.ProductID,
+                    "product_name": stockErr.ProductName,
+                    "requested":    stockErr.Requested,
+                    "available":    stockErr.Available,
+                })
+                return
+            }
+            
+            // Otros errores
+            http.Error(w, "could not create order", http.StatusInternalServerError)
+            return
+        }
+        
+        // Success...
+    }
+}
+```
+
+**Frontend - Manejo de Error:**
+```tsx
+// CreateSalesOrderPage.tsx
+const handleSubmit = async () => {
+  try {
+    const dto = {
+      customer_id: customerIdNum,
+      items: orderItems.map(it => ({ 
+        product_id: it.productId, 
+        quantity: it.quantity 
+      })),
+    }
+    await api.post('/sales-orders', dto)
+    toast.success('Orden de venta creada correctamente')
+    navigate('/sales-orders')
+  } catch (e: any) {
+    // Detectar error 409 con detalles
+    if (e?.response?.status === 409 && 
+        e?.response?.data?.error === 'insufficient_stock') {
+      const data = e.response.data
+      
+      // Toast con detalles específicos
+      const message = 
+        `⚠️ Stock insuficiente para "${data.product_name}"\n` +
+        `Solicitado: ${data.requested} | Disponible: ${data.available}`
+      
+      toast.error(message, { duration: 6000 })  // 6s para leer
+    } else {
+      toast.error('No se pudo guardar la orden')
+    }
+  }
+}
+```
+
+**Beneficios:**
+| Aspecto | Antes | Ahora |
+|---------|-------|-------|
+| **Performance** | TX → FEFO → Rollback | Query SUM → Return |
+| **Tiempo** | ~100ms (TX completa) | ~10ms (query simple) |
+| **UX** | "Error al crear orden" | "Stock insuficiente para Tornillo M8: solicitado 50, disponible 30" |
+| **Debugging** | Logs crípticos | Logs estructurados con detalles |
+| **DB Load** | Locks innecesarios | Sin locks si falla validación |
+
+**Comparación de Queries:**
+```sql
+-- ANTES (dentro de TX): Iterar lotes con FEFO
+SELECT id, quantity FROM product_batches 
+WHERE product_id = 123 AND quantity > 0 
+ORDER BY expiry_date ASC FOR UPDATE;
+
+-- AHORA (pre-validación): Agregado simple
+SELECT COALESCE(SUM(quantity), 0), name 
+FROM product_batches pb JOIN products p 
+WHERE product_id = 123 AND quantity > 0;
+```
+
+**Logs Estructurados:**
+```
+INFO: Stock validation passed | product=Tornillo M8 requested=20 available=50
+INFO: Stock validation passed, starting transaction | orderItems=3
+INFO: ConsumeStockFEFO: starting FEFO consumption | productID=123 quantityNeeded=20
+INFO: Order created successfully | orderID=456
+
+WARN: Insufficient stock detected | product=Tuerca M6 requested=100 available=30
+ERROR: Stock validation failed | error=insufficient stock for product Tuerca M6...
+```
+
+**Archivos Modificados:**
+```
+backend/internal/models/sales_order.go
+  + InsufficientStockError type (15 líneas)
+  + ValidateStockAvailability() method (45 líneas)
+  + Integración en Create() (3 líneas)
+
+backend/internal/handlers/sales_order_handlers.go
+  + Detección de error específico (15 líneas)
+  + Response JSON detallado (8 líneas)
+
+frontend/src/pages/CreateSalesOrderPage.tsx
+  + Manejo de error 409 (10 líneas)
+  + Toast con detalles (5 líneas)
+```
 
 ---
 

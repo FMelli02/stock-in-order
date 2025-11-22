@@ -2,10 +2,32 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import api from '../services/api'
+import PaginationControls from '../components/PaginationControls'
 import type { PurchaseOrder } from '../types/purchaseOrder'
+
+interface PaginationMetadata {
+  current_page: number
+  page_size: number
+  first_page: number
+  last_page: number
+  total_records: number
+}
+
+interface PaginatedResponse {
+  items: PurchaseOrder[]
+  metadata: PaginationMetadata
+}
 
 export default function PurchaseOrdersPage() {
   const [orders, setOrders] = useState<PurchaseOrder[]>([])
+  const [metadata, setMetadata] = useState<PaginationMetadata>({
+    current_page: 1,
+    page_size: 20,
+    first_page: 1,
+    last_page: 1,
+    total_records: 0
+  })
+  const [, setCurrentPage] = useState<number>(1)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [updating, setUpdating] = useState<number | null>(null)
@@ -15,17 +37,23 @@ export default function PurchaseOrdersPage() {
   const [filterDateTo, setFilterDateTo] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
 
-  const load = async () => {
+  const load = async (page: number = 1) => {
     try {
       setLoading(true)
-      const res = await api.get<PurchaseOrder[]>('/purchase-orders')
-      setOrders(res.data)
+      const res = await api.get<PaginatedResponse>(`/purchase-orders?page=${page}&page_size=20`)
+      setOrders(res.data.items)
+      setMetadata(res.data.metadata)
+      setCurrentPage(page)
     } catch (e) {
       console.error(e)
       setError('No se pudieron cargar las órdenes de compra')
     } finally {
       setLoading(false)
     }
+  }
+
+  const handlePageChange = (page: number) => {
+    load(page)
   }
 
   useEffect(() => {
@@ -189,6 +217,11 @@ export default function PurchaseOrdersPage() {
               )}
             </tbody>
           </table>
+
+          <PaginationControls 
+            metadata={metadata} 
+            onPageChange={handlePageChange} 
+          />
         </div>
       )}
     </div>

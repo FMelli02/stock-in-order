@@ -4,21 +4,45 @@ import toast from 'react-hot-toast'
 import api from '../services/api'
 import Modal from '../components/Modal'
 import SupplierForm from '../components/SupplierForm'
+import PaginationControls from '../components/PaginationControls'
 import type { Supplier } from '../types/supplier'
+
+interface PaginationMetadata {
+  current_page: number
+  page_size: number
+  first_page: number
+  last_page: number
+  total_records: number
+}
+
+interface PaginatedResponse {
+  items: Supplier[]
+  metadata: PaginationMetadata
+}
 
 export default function SuppliersPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [metadata, setMetadata] = useState<PaginationMetadata>({
+    current_page: 1,
+    page_size: 20,
+    first_page: 1,
+    last_page: 1,
+    total_records: 0
+  })
+  const [, setCurrentPage] = useState<number>(1)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null)
 
-  const fetchSuppliers = async () => {
+  const fetchSuppliers = async (page: number = 1) => {
     try {
       setLoading(true)
       setError(null)
-      const res = await api.get<Supplier[]>('/suppliers')
-      setSuppliers(res.data)
+      const res = await api.get<PaginatedResponse>(`/suppliers?page=${page}&page_size=20`)
+      setSuppliers(res.data.items)
+      setMetadata(res.data.metadata)
+      setCurrentPage(page)
     } catch (err: unknown) {
       let message = 'Error al cargar proveedores'
       if (isAxiosError(err)) {
@@ -31,6 +55,10 @@ export default function SuppliersPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handlePageChange = (page: number) => {
+    fetchSuppliers(page)
   }
 
   useEffect(() => {
@@ -171,6 +199,11 @@ export default function SuppliersPage() {
               )}
             </tbody>
           </table>
+
+          <PaginationControls 
+            metadata={metadata} 
+            onPageChange={handlePageChange} 
+          />
         </div>
       )}
 

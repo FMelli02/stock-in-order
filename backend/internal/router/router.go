@@ -47,11 +47,18 @@ func SetupRouter(db *pgxpool.Pool, rabbit *rabbitmq.Client, auditRepo *repositor
 		AuditRepo: auditRepo,
 	}
 
+	// Initialize email service for password recovery
+	emailService := services.NewEmailService()
+
 	// API v1
 	api := r.PathPrefix("/api/v1").Subrouter()
 	api.HandleFunc("/health", handlers.Health()).Methods("GET")
 	api.HandleFunc("/users/register", handlers.RegisterUser(db)).Methods("POST")
 	api.HandleFunc("/users/login", handlers.LoginUser(db, cfg.JWTSecret)).Methods("POST")
+
+	// Password recovery endpoints (public, no authentication required)
+	api.HandleFunc("/users/forgot-password", handlers.ForgotPassword(db, emailService)).Methods("POST")
+	api.HandleFunc("/users/reset-password", handlers.ResetPassword(db)).Methods("PUT")
 
 	// Obtener usuario autenticado (protegido por JWT)
 	api.Handle("/users/me",
@@ -98,6 +105,8 @@ func SetupRouter(db *pgxpool.Pool, rabbit *rabbitmq.Client, auditRepo *repositor
 		withPaywall(http.HandlerFunc(handlers.ListProducts(db)))).Methods("GET")
 	api.Handle("/products/{id:[0-9]+}",
 		withPaywall(http.HandlerFunc(handlers.GetProduct(db)))).Methods("GET")
+	api.Handle("/products/{id:[0-9]+}/batches",
+		withPaywall(http.HandlerFunc(handlers.GetProductBatches(db)))).Methods("GET")
 	api.Handle("/products/{id:[0-9]+}/movements",
 		withPaywall(http.HandlerFunc(handlers.GetProductMovements(db)))).Methods("GET")
 

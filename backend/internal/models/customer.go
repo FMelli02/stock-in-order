@@ -56,7 +56,7 @@ func (m *CustomerModel) GetByID(id int64, organizationID int64) (*Customer, erro
 	return &c, nil
 }
 
-// GetAllForUser lists all customers for an organization.
+// GetAllForUser lists all customers for an organization (sin paginación - DEPRECATED).
 func (m *CustomerModel) GetAllForUser(organizationID int64) ([]Customer, error) {
 	const q = `
 		SELECT id, name, email, phone, address, user_id, created_at
@@ -82,6 +82,48 @@ func (m *CustomerModel) GetAllForUser(organizationID int64) ([]Customer, error) 
 		return nil, rows.Err()
 	}
 	return out, nil
+}
+
+// GetAllForUserPaginated lists paginated customers for an organization.
+func (m *CustomerModel) GetAllForUserPaginated(organizationID int64, filters Filters) ([]Customer, Metadata, error) {
+	// Contar total de registros
+	const qCount = `SELECT COUNT(*) FROM customers WHERE user_id = $1`
+
+	var totalRecords int
+	err := m.DB.QueryRow(context.Background(), qCount, organizationID).Scan(&totalRecords)
+	if err != nil {
+		return nil, Metadata{}, err
+	}
+
+	metadata := CalculateMetadata(totalRecords, filters.Page, filters.PageSize)
+
+	// Query con paginación
+	const q = `
+		SELECT id, name, email, phone, address, user_id, created_at
+		FROM customers
+		WHERE user_id = $1
+		ORDER BY name
+		LIMIT $2 OFFSET $3`
+
+	rows, err := m.DB.Query(context.Background(), q, organizationID, filters.PageSize, filters.Offset())
+	if err != nil {
+		return nil, Metadata{}, err
+	}
+	defer rows.Close()
+
+	out := []Customer{}
+	for rows.Next() {
+		var c Customer
+		if err := rows.Scan(&c.ID, &c.Name, &c.Email, &c.Phone, &c.Address, &c.UserID, &c.CreatedAt); err != nil {
+			return nil, Metadata{}, err
+		}
+		out = append(out, c)
+	}
+	if rows.Err() != nil {
+		return nil, Metadata{}, rows.Err()
+	}
+
+	return out, metadata, nil
 }
 
 // Update updates a customer if it belongs to the organization.

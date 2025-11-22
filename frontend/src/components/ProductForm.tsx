@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import api from '../services/api'
+import ProductBatchesTable from './ProductBatchesTable'
 import type { Product } from '../types/product'
 
 type Props = {
@@ -110,6 +111,13 @@ export default function ProductForm({ productToEdit, onSuccess }: Props) {
           {submitting ? 'Guardando...' : 'Guardar'}
         </button>
       </div>
+
+      {/* Mostrar lotes solo cuando se está editando un producto existente */}
+      {productToEdit && (
+        <div className="mt-6 pt-6 border-t border-gray-200">
+          <ProductBatchesTable productId={productToEdit.id} />
+        </div>
+      )}
     </form>
   )
 }

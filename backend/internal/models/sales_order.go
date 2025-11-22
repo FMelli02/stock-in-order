@@ -47,6 +47,81 @@ type SalesOrderModel struct {
 // ErrInsufficientStock is returned when available stock is not enough.
 var ErrInsufficientStock = errors.New("insufficient stock")
 
+// InsufficientStockError provides detailed information about stock shortage
+type InsufficientStockError struct {
+	ProductID   int64  `json:"product_id"`
+	ProductName string `json:"product_name"`
+	Requested   int    `json:"requested"`
+	Available   int    `json:"available"`
+}
+
+func (e *InsufficientStockError) Error() string {
+	return fmt.Sprintf("insufficient stock for product %s (ID: %d): requested %d, available %d",
+		e.ProductName, e.ProductID, e.Requested, e.Available)
+}
+
+// ValidateStockAvailability checks if there's enough total stock for all items BEFORE starting a transaction.
+// This prevents unnecessary database operations and provides better error messages.
+func (m *SalesOrderModel) ValidateStockAvailability(items []OrderItem, userID int64) error {
+	ctx := context.Background()
+
+	for _, item := range items {
+		// Query total available stock across all batches
+		const qTotalStock = `
+			SELECT COALESCE(SUM(pb.quantity), 0), p.name
+			FROM product_batches pb
+			JOIN products p ON pb.product_id = p.id
+			WHERE pb.product_id = $1 AND pb.user_id = $2 AND pb.quantity > 0
+			GROUP BY p.name`
+
+		var availableStock int
+		var productName string
+		err := m.DB.QueryRow(ctx, qTotalStock, item.ProductID, userID).Scan(&availableStock, &productName)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				// No batches found, stock is 0
+				// Try to get product name separately
+				const qProductName = `SELECT name FROM products WHERE id = $1 AND user_id = $2`
+				if nameErr := m.DB.QueryRow(ctx, qProductName, item.ProductID, userID).Scan(&productName); nameErr != nil {
+					productName = fmt.Sprintf("Product #%d", item.ProductID)
+				}
+				return &InsufficientStockError{
+					ProductID:   item.ProductID,
+					ProductName: productName,
+					Requested:   item.Quantity,
+					Available:   0,
+				}
+			}
+			slog.Error("ValidateStockAvailability: failed to query stock", "productID", item.ProductID, "error", err)
+			return err
+		}
+
+		// Check if available stock is sufficient
+		if availableStock < item.Quantity {
+			slog.Warn("ValidateStockAvailability: insufficient stock detected",
+				"productID", item.ProductID,
+				"productName", productName,
+				"requested", item.Quantity,
+				"available", availableStock)
+
+			return &InsufficientStockError{
+				ProductID:   item.ProductID,
+				ProductName: productName,
+				Requested:   item.Quantity,
+				Available:   availableStock,
+			}
+		}
+
+		slog.Info("ValidateStockAvailability: stock check passed",
+			"productID", item.ProductID,
+			"productName", productName,
+			"requested", item.Quantity,
+			"available", availableStock)
+	}
+
+	return nil
+}
+
 // ConsumeStockFEFO implements First Expired First Out logic for stock consumption.
 // It deducts the requested quantity from product batches, prioritizing those that expire first.
 // This function MUST be called within a transaction.
@@ -164,6 +239,16 @@ func ConsumeStockFEFO(ctx context.Context, tx pgx.Tx, productID int64, userID in
 // Create inserts a sales order with items and updates stock atomically.
 func (m *SalesOrderModel) Create(order *SalesOrder, items []OrderItem) error {
 	ctx := context.Background()
+
+	// CRITICAL: Validate stock availability BEFORE starting the transaction
+	// This prevents unnecessary DB operations and provides better error messages
+	if err := m.ValidateStockAvailability(items, order.UserID); err != nil {
+		slog.Error("Create: stock validation failed", "error", err)
+		return err
+	}
+
+	slog.Info("Create: stock validation passed, starting transaction", "orderItems", len(items))
+
 	tx, err := m.DB.Begin(ctx)
 	if err != nil {
 		return err
@@ -245,6 +330,7 @@ func (m *SalesOrderModel) Create(order *SalesOrder, items []OrderItem) error {
 }
 
 // GetAllForUser returns all sales orders for the given user.
+// GetAllForUser lists all sales orders for an organization (sin paginación - DEPRECATED).
 func (m *SalesOrderModel) GetAllForUser(userID int64) ([]SalesOrder, error) {
 	const q = `
 		SELECT 
@@ -277,6 +363,58 @@ func (m *SalesOrderModel) GetAllForUser(userID int64) ([]SalesOrder, error) {
 		return nil, rows.Err()
 	}
 	return out, nil
+}
+
+// GetAllForUserPaginated lists paginated sales orders for an organization.
+func (m *SalesOrderModel) GetAllForUserPaginated(userID int64, filters Filters) ([]SalesOrder, Metadata, error) {
+	// Contar total de registros
+	const qCount = `
+		SELECT COUNT(*) 
+		FROM sales_orders so 
+		WHERE so.user_id = $1`
+
+	var totalRecords int
+	err := m.DB.QueryRow(context.Background(), qCount, userID).Scan(&totalRecords)
+	if err != nil {
+		return nil, Metadata{}, err
+	}
+
+	metadata := CalculateMetadata(totalRecords, filters.Page, filters.PageSize)
+
+	// Query con paginación y JOIN con customers
+	const q = `
+		SELECT 
+			so.id, so.customer_id, so.order_date, so.status, so.total_amount, so.user_id,
+			c.name AS customer_name
+		FROM sales_orders so
+		LEFT JOIN customers c ON so.customer_id = c.id
+		WHERE so.user_id = $1
+		ORDER BY so.order_date DESC
+		LIMIT $2 OFFSET $3`
+
+	rows, err := m.DB.Query(context.Background(), q, userID, filters.PageSize, filters.Offset())
+	if err != nil {
+		return nil, Metadata{}, err
+	}
+	defer rows.Close()
+
+	out := []SalesOrder{}
+	for rows.Next() {
+		var o SalesOrder
+		var customerName sql.NullString
+		if err := rows.Scan(&o.ID, &o.CustomerID, &o.OrderDate, &o.Status, &o.TotalAmount, &o.UserID, &customerName); err != nil {
+			return nil, Metadata{}, err
+		}
+		if customerName.Valid {
+			o.CustomerName = customerName.String
+		}
+		out = append(out, o)
+	}
+	if rows.Err() != nil {
+		return nil, Metadata{}, rows.Err()
+	}
+
+	return out, metadata, nil
 }
 
 // GetAllForUserWithFilters returns sales orders for the user with optional filters

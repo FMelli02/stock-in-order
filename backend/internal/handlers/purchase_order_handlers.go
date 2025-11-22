@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -94,14 +95,31 @@ func GetPurchaseOrders(db *pgxpool.Pool) http.HandlerFunc {
 			return
 		}
 
+		// Leer query params para paginación
+		page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+		pageSize, _ := strconv.Atoi(r.URL.Query().Get("page_size"))
+		filters := models.NewFilters(page, pageSize)
+
 		pom := &models.PurchaseOrderModel{DB: db}
-		orders, err := pom.GetAllForUser(organizationID)
+		orders, metadata, err := pom.GetAllForUserPaginated(organizationID, filters)
 		if err != nil {
 			http.Error(w, "could not fetch purchase orders", http.StatusInternalServerError)
 			return
 		}
+
+		slog.Info("Purchase orders fetched with pagination",
+			"page", filters.Page,
+			"pageSize", filters.PageSize,
+			"totalRecords", metadata.TotalRecords,
+		)
+
+		response := models.PaginatedResponse{
+			Items:    orders,
+			Metadata: metadata,
+		}
+
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(orders)
+		_ = json.NewEncoder(w).Encode(response)
 	}
 }
 

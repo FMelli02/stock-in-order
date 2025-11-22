@@ -24,6 +24,8 @@ import ScannerPage from './pages/ScannerPage'
 import PricingPage from './pages/PricingPage'
 import BillingPage from './pages/BillingPage'
 import ProfilePage from './pages/ProfilePage'
+import ForgotPasswordPage from './pages/ForgotPasswordPage'
+import ResetPasswordPage from './pages/ResetPasswordPage'
 
 const router = createBrowserRouter([
   {
@@ -56,6 +58,8 @@ const router = createBrowserRouter([
   },
   { path: '/login', element: <LoginPage /> },
   { path: '/register', element: <RegisterPage /> },
+  { path: '/forgot-password', element: <ForgotPasswordPage /> },
+  { path: '/reset-password', element: <ResetPasswordPage /> },
   { path: '/pricing', element: <PricingPage /> }, // Página de precios (pública)
 ])
 

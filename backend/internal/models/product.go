@@ -88,8 +88,8 @@ func (m *ProductModel) GetByID(id int64, organizationID int64) (*Product, error)
 	return &p, nil
 }
 
-// GetAllForUser returns all products for a given organization.
-// Ahora calcula quantity desde product_batches con SUM()
+// GetAllForUser returns all products for a given organization (sin paginación - DEPRECATED).
+// Usar GetAllForUserPaginated en su lugar.
 func (m *ProductModel) GetAllForUser(organizationID int64) ([]Product, error) {
 	const q = `
 		SELECT 
@@ -126,6 +126,63 @@ func (m *ProductModel) GetAllForUser(organizationID int64) ([]Product, error) {
 		return nil, rows.Err()
 	}
 	return products, nil
+}
+
+// GetAllForUserPaginated returns paginated products for a given organization.
+func (m *ProductModel) GetAllForUserPaginated(organizationID int64, filters Filters) ([]Product, Metadata, error) {
+	// Query para obtener el total de registros
+	const qCount = `
+		SELECT COUNT(DISTINCT p.id)
+		FROM products p
+		WHERE p.user_id = $1`
+
+	var totalRecords int
+	err := m.DB.QueryRow(context.Background(), qCount, organizationID).Scan(&totalRecords)
+	if err != nil {
+		return nil, Metadata{}, err
+	}
+
+	// Calcular metadata
+	metadata := CalculateMetadata(totalRecords, filters.Page, filters.PageSize)
+
+	// Query principal con paginación
+	const q = `
+		SELECT 
+			p.id, 
+			p.name, 
+			p.sku, 
+			p.description, 
+			p.stock_minimo, 
+			p.notificado, 
+			p.user_id, 
+			p.created_at,
+			COALESCE(SUM(pb.quantity), 0) AS calculated_quantity
+		FROM products p
+		LEFT JOIN product_batches pb ON p.id = pb.product_id
+		WHERE p.user_id = $1
+		GROUP BY p.id, p.name, p.sku, p.description, p.stock_minimo, p.notificado, p.user_id, p.created_at
+		ORDER BY p.name
+		LIMIT $2 OFFSET $3`
+
+	rows, err := m.DB.Query(context.Background(), q, organizationID, filters.PageSize, filters.Offset())
+	if err != nil {
+		return nil, Metadata{}, err
+	}
+	defer rows.Close()
+
+	products := []Product{}
+	for rows.Next() {
+		var p Product
+		if err := rows.Scan(&p.ID, &p.Name, &p.SKU, &p.Description, &p.StockMinimo, &p.Notificado, &p.UserID, &p.CreatedAt, &p.CalculatedQuantity); err != nil {
+			return nil, Metadata{}, err
+		}
+		products = append(products, p)
+	}
+	if rows.Err() != nil {
+		return nil, Metadata{}, rows.Err()
+	}
+
+	return products, metadata, nil
 }
 
 // Update updates a product if it belongs to the organization.
@@ -177,4 +234,40 @@ func (m *ProductModel) AdjustStock(productID int64, organizationID int64, quanti
 	// DEPRECATED: La columna quantity ya no existe en products
 	// El stock ahora se calcula desde product_batches
 	return errors.New("AdjustStock is deprecated - use product_batches instead")
+}
+
+// GetBatchesByProductID returns all active batches for a product (quantity > 0)
+// ordered by expiry date (FEFO - First Expired First Out)
+func (m *ProductModel) GetBatchesByProductID(productID int64, organizationID int64) ([]ProductBatch, error) {
+	const q = `
+		SELECT id, product_id, user_id, lote_number, quantity, expiry_date, created_at
+		FROM product_batches
+		WHERE product_id = $1 AND user_id = $2 AND quantity > 0
+		ORDER BY expiry_date ASC NULLS LAST, created_at ASC`
+
+	rows, err := m.DB.Query(context.Background(), q, productID, organizationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var batches []ProductBatch
+	for rows.Next() {
+		var b ProductBatch
+		if err := rows.Scan(&b.ID, &b.ProductID, &b.UserID, &b.LoteNumber, &b.Quantity, &b.ExpiryDate, &b.CreatedAt); err != nil {
+			return nil, err
+		}
+		batches = append(batches, b)
+	}
+
+	if rows.Err() != nil {
+		return nil, rows.Err()
+	}
+
+	// Return empty slice instead of nil for consistency
+	if batches == nil {
+		batches = []ProductBatch{}
+	}
+
+	return batches, nil
 }

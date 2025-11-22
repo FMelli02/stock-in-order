@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -68,11 +69,26 @@ func CreateSalesOrder(db *pgxpool.Pool) http.HandlerFunc {
 
 		som := &models.SalesOrderModel{DB: db}
 		if err := som.Create(order, items); err != nil {
+			// Check if it's a detailed insufficient stock error
+			if stockErr, ok := err.(*models.InsufficientStockError); ok {
+				w.WriteHeader(http.StatusConflict)
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"error":        "insufficient_stock",
+					"message":      stockErr.Error(),
+					"product_id":   stockErr.ProductID,
+					"product_name": stockErr.ProductName,
+					"requested":    stockErr.Requested,
+					"available":    stockErr.Available,
+				})
+				return
+			}
+			// Legacy check for generic insufficient stock error
 			if err == models.ErrInsufficientStock {
 				w.WriteHeader(http.StatusConflict)
 				_ = json.NewEncoder(w).Encode(map[string]any{"error": "insufficient stock"})
 				return
 			}
+			slog.Error("CreateSalesOrder: failed to create order", "error", err)
 			http.Error(w, "could not create order", http.StatusInternalServerError)
 			return
 		}
@@ -95,14 +111,31 @@ func GetSalesOrders(db *pgxpool.Pool) http.HandlerFunc {
 			return
 		}
 
+		// Leer query params para paginación
+		page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+		pageSize, _ := strconv.Atoi(r.URL.Query().Get("page_size"))
+		filters := models.NewFilters(page, pageSize)
+
 		som := &models.SalesOrderModel{DB: db}
-		orders, err := som.GetAllForUser(organizationID)
+		orders, metadata, err := som.GetAllForUserPaginated(organizationID, filters)
 		if err != nil {
 			http.Error(w, "could not fetch orders", http.StatusInternalServerError)
 			return
 		}
+
+		slog.Info("Sales orders fetched with pagination",
+			"page", filters.Page,
+			"pageSize", filters.PageSize,
+			"totalRecords", metadata.TotalRecords,
+		)
+
+		response := models.PaginatedResponse{
+			Items:    orders,
+			Metadata: metadata,
+		}
+
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(orders)
+		_ = json.NewEncoder(w).Encode(response)
 	}
 }
 

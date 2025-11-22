@@ -5,23 +5,47 @@ import toast from 'react-hot-toast'
 import api from '../services/api'
 import Modal from '../components/Modal'
 import ProductForm from '../components/ProductForm'
+import PaginationControls from '../components/PaginationControls'
 import type { Product } from '../types/product'
+
+interface PaginationMetadata {
+  current_page: number
+  page_size: number
+  first_page: number
+  last_page: number
+  total_records: number
+}
+
+interface PaginatedResponse {
+  items: Product[]
+  metadata: PaginationMetadata
+}
 
 export default function ProductsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [products, setProducts] = useState<Product[]>([])
+  const [metadata, setMetadata] = useState<PaginationMetadata>({
+    current_page: 1,
+    page_size: 20,
+    first_page: 1,
+    last_page: 1,
+    total_records: 0
+  })
+  const [, setCurrentPage] = useState<number>(1)
   const [loading, setLoading] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [searchTerm, setSearchTerm] = useState<string>('')
 
-  const fetchProducts = async () => {
+  const fetchProducts = async (page: number = 1) => {
     try {
       setLoading(true)
       setError(null)
-      const res = await api.get<Product[]>('/products')
-      setProducts(res.data)
+      const res = await api.get<PaginatedResponse>(`/products?page=${page}&page_size=20`)
+      setProducts(res.data.items)
+      setMetadata(res.data.metadata)
+      setCurrentPage(page)
     } catch (err: unknown) {
       let message = 'Error al cargar productos'
       if (isAxiosError(err)) {
@@ -38,6 +62,10 @@ export default function ProductsPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handlePageChange = (page: number) => {
+    fetchProducts(page)
   }
 
   useEffect(() => {
@@ -263,6 +291,11 @@ export default function ProductsPage() {
               )}
             </tbody>
           </table>
+
+          <PaginationControls 
+            metadata={metadata} 
+            onPageChange={handlePageChange} 
+          />
         </div>
       )}
 

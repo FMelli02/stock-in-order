@@ -126,9 +126,22 @@ export default function CreateSalesOrderPage() {
       await api.post('/sales-orders', dto)
       toast.success('Orden de venta creada correctamente')
       navigate('/sales-orders')
-    } catch (e) {
+    } catch (e: any) {
       console.error(e)
-      toast.error('No se pudo guardar la orden')
+      
+      // Check if it's an insufficient stock error with details
+      if (e?.response?.status === 409 && e?.response?.data?.error === 'insufficient_stock') {
+        const errorData = e.response.data
+        const message = `⚠️ Stock insuficiente para "${errorData.product_name}"\n` +
+                       `Solicitado: ${errorData.requested} | Disponible: ${errorData.available}`
+        toast.error(message, { duration: 6000 })
+      } else if (e?.response?.data?.error) {
+        // Other API errors
+        toast.error(`Error: ${e.response.data.error}`)
+      } else {
+        // Generic error
+        toast.error('No se pudo guardar la orden')
+      }
     } finally {
       setSubmitting(false)
     }

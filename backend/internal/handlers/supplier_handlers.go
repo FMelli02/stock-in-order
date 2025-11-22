@@ -64,14 +64,31 @@ func ListSuppliers(db *pgxpool.Pool) http.HandlerFunc {
 			return
 		}
 
+		// Leer query params para paginación
+		page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+		pageSize, _ := strconv.Atoi(r.URL.Query().Get("page_size"))
+		filters := models.NewFilters(page, pageSize)
+
 		sm := &models.SupplierModel{DB: db}
-		items, err := sm.GetAllForUser(organizationID)
+		items, metadata, err := sm.GetAllForUserPaginated(organizationID, filters)
 		if err != nil {
 			http.Error(w, "could not fetch suppliers", http.StatusInternalServerError)
 			return
 		}
+
+		slog.Info("Suppliers fetched with pagination",
+			"page", filters.Page,
+			"pageSize", filters.PageSize,
+			"totalRecords", metadata.TotalRecords,
+		)
+
+		response := models.PaginatedResponse{
+			Items:    items,
+			Metadata: metadata,
+		}
+
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(items)
+		_ = json.NewEncoder(w).Encode(response)
 	}
 }
 

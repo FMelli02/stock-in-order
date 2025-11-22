@@ -58,7 +58,7 @@ func (m *SupplierModel) GetByID(id int64, organizationID int64) (*Supplier, erro
 	return &s, nil
 }
 
-// GetAllForUser lists all suppliers for an organization.
+// GetAllForUser lists all suppliers for an organization (sin paginación - DEPRECATED).
 func (m *SupplierModel) GetAllForUser(organizationID int64) ([]Supplier, error) {
 	const q = `
 		SELECT id, name, contact_person, email, phone, address, user_id, created_at
@@ -84,6 +84,48 @@ func (m *SupplierModel) GetAllForUser(organizationID int64) ([]Supplier, error) 
 		return nil, rows.Err()
 	}
 	return out, nil
+}
+
+// GetAllForUserPaginated lists paginated suppliers for an organization.
+func (m *SupplierModel) GetAllForUserPaginated(organizationID int64, filters Filters) ([]Supplier, Metadata, error) {
+	// Contar total de registros
+	const qCount = `SELECT COUNT(*) FROM suppliers WHERE user_id = $1`
+
+	var totalRecords int
+	err := m.DB.QueryRow(context.Background(), qCount, organizationID).Scan(&totalRecords)
+	if err != nil {
+		return nil, Metadata{}, err
+	}
+
+	metadata := CalculateMetadata(totalRecords, filters.Page, filters.PageSize)
+
+	// Query con paginación
+	const q = `
+		SELECT id, name, contact_person, email, phone, address, user_id, created_at
+		FROM suppliers
+		WHERE user_id = $1
+		ORDER BY name
+		LIMIT $2 OFFSET $3`
+
+	rows, err := m.DB.Query(context.Background(), q, organizationID, filters.PageSize, filters.Offset())
+	if err != nil {
+		return nil, Metadata{}, err
+	}
+	defer rows.Close()
+
+	out := []Supplier{}
+	for rows.Next() {
+		var s Supplier
+		if err := rows.Scan(&s.ID, &s.Name, &s.ContactPerson, &s.Email, &s.Phone, &s.Address, &s.UserID, &s.CreatedAt); err != nil {
+			return nil, Metadata{}, err
+		}
+		out = append(out, s)
+	}
+	if rows.Err() != nil {
+		return nil, Metadata{}, rows.Err()
+	}
+
+	return out, metadata, nil
 }
 
 // Update updates a supplier if it belongs to the organization.

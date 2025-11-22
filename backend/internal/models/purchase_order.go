@@ -100,6 +100,7 @@ func (m *PurchaseOrderModel) Create(order *PurchaseOrder, items []PurchaseOrderI
 }
 
 // GetAllForUser returns all purchase orders for the given user.
+// GetAllForUser lists all purchase orders for an organization (sin paginación - DEPRECATED).
 func (m *PurchaseOrderModel) GetAllForUser(userID int64) ([]PurchaseOrder, error) {
 	const q = `
 		SELECT 
@@ -134,6 +135,60 @@ func (m *PurchaseOrderModel) GetAllForUser(userID int64) ([]PurchaseOrder, error
 		return nil, rows.Err()
 	}
 	return out, nil
+}
+
+// GetAllForUserPaginated lists paginated purchase orders for an organization.
+func (m *PurchaseOrderModel) GetAllForUserPaginated(userID int64, filters Filters) ([]PurchaseOrder, Metadata, error) {
+	// Contar total de registros
+	const qCount = `
+		SELECT COUNT(*) 
+		FROM purchase_orders po 
+		WHERE po.user_id = $1`
+
+	var totalRecords int
+	err := m.DB.QueryRow(context.Background(), qCount, userID).Scan(&totalRecords)
+	if err != nil {
+		return nil, Metadata{}, err
+	}
+
+	metadata := CalculateMetadata(totalRecords, filters.Page, filters.PageSize)
+
+	// Query con paginación y JOIN con suppliers
+	const q = `
+		SELECT 
+			po.id, po.supplier_id, po.order_date, po.status, po.user_id,
+			s.name AS supplier_name
+		FROM purchase_orders po
+		LEFT JOIN suppliers s ON po.supplier_id = s.id
+		WHERE po.user_id = $1
+		ORDER BY po.order_date DESC
+		LIMIT $2 OFFSET $3`
+
+	rows, err := m.DB.Query(context.Background(), q, userID, filters.PageSize, filters.Offset())
+	if err != nil {
+		return nil, Metadata{}, err
+	}
+	defer rows.Close()
+
+	out := []PurchaseOrder{}
+	for rows.Next() {
+		var o PurchaseOrder
+		var supplierName sql.NullString
+		var orderDate time.Time
+		if err := rows.Scan(&o.ID, &o.SupplierID, &orderDate, &o.Status, &o.UserID, &supplierName); err != nil {
+			return nil, Metadata{}, err
+		}
+		o.OrderDate = &orderDate
+		if supplierName.Valid {
+			o.SupplierName = supplierName.String
+		}
+		out = append(out, o)
+	}
+	if rows.Err() != nil {
+		return nil, Metadata{}, rows.Err()
+	}
+
+	return out, metadata, nil
 }
 
 // GetAllForUserWithFilters returns purchase orders for the user with optional filters

@@ -92,7 +92,7 @@ func CreateProduct(db *pgxpool.Pool) http.HandlerFunc {
 	}
 }
 
-// ListProducts handles GET /api/v1/products
+// ListProducts handles GET /api/v1/products with pagination
 func ListProducts(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
@@ -102,20 +102,32 @@ func ListProducts(db *pgxpool.Pool) http.HandlerFunc {
 			return
 		}
 
-		slog.Info("ListProducts called", "organizationID", organizationID)
+		// Leer query params para paginación
+		page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+		pageSize, _ := strconv.Atoi(r.URL.Query().Get("page_size"))
+
+		filters := models.NewFilters(page, pageSize)
+
+		slog.Info("ListProducts called", "organizationID", organizationID, "page", filters.Page, "pageSize", filters.PageSize)
 
 		pm := &models.ProductModel{DB: db}
-		items, err := pm.GetAllForUser(organizationID)
+		items, metadata, err := pm.GetAllForUserPaginated(organizationID, filters)
 		if err != nil {
 			slog.Error("ListProducts failed", "error", err, "organizationID", organizationID)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		slog.Info("ListProducts result", "organizationID", organizationID, "count", len(items))
+		slog.Info("ListProducts result", "organizationID", organizationID, "count", len(items), "totalRecords", metadata.TotalRecords)
+
+		// Respuesta con estructura paginada
+		response := models.PaginatedResponse{
+			Items:    items,
+			Metadata: metadata,
+		}
 
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(items)
+		_ = json.NewEncoder(w).Encode(response)
 	}
 }
 
@@ -364,5 +376,39 @@ func AdjustProductStock(db *pgxpool.Pool) http.HandlerFunc {
 		}
 
 		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// GetProductBatches handles GET /api/v1/products/{id}/batches
+// Returns all active batches (quantity > 0) for a product, ordered by expiry date
+func GetProductBatches(db *pgxpool.Pool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
+		if !ok {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		vars := mux.Vars(r)
+		productID, err := strconv.ParseInt(vars["id"], 10, 64)
+		if err != nil {
+			http.Error(w, "invalid product ID", http.StatusBadRequest)
+			return
+		}
+
+		pm := &models.ProductModel{DB: db}
+		batches, err := pm.GetBatchesByProductID(productID, organizationID)
+		if err != nil {
+			slog.Error("Failed to get product batches",
+				"productID", productID,
+				"organizationID", organizationID,
+				"error", err,
+			)
+			http.Error(w, "could not fetch batches", http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(batches)
 	}
 }

@@ -22,6 +22,7 @@ type ReportRequest struct {
 	UserID     int64  `json:"user_id"`
 	Email      string `json:"email_to"`
 	ReportType string `json:"report_type"`
+	OrderID    int64  `json:"order_id,omitempty"` // Solo para sales_order_pdf
 }
 
 // Connect establece conexión a RabbitMQ y retorna un cliente

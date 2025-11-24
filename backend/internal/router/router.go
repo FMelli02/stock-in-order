@@ -273,6 +273,17 @@ func SetupRouter(db *pgxpool.Pool, rabbit *rabbitmq.Client, auditRepo *repositor
 			middleware.RequireRole("vendedor")(http.HandlerFunc(handlers.GetSalesOrderByID(db))),
 		)).Methods("GET")
 
+	// Solicitar PDF de orden de venta: Admin y Vendedor (con paywall)
+	// Crear AppContextPDF para el handler de PDF
+	appContextPDF := &handlers.AppContextPDF{
+		DB:       db,
+		RabbitMQ: rabbit,
+	}
+	api.Handle("/sales-orders/{id:[0-9]+}/request-pdf",
+		withPaywall(
+			middleware.RequireRole("vendedor")(handlers.RequestSalesOrderPDFHandler(appContextPDF)),
+		)).Methods("POST")
+
 	// ============================================
 	// PURCHASE ORDERS - Con protección RBAC, Auditoría y PAYWALL
 	// ============================================

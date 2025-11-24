@@ -4,7 +4,9 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"time"
 
+	"github.com/go-chi/httprate"
 	"github.com/gorilla/mux"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/cors"
@@ -31,6 +33,9 @@ type Application struct {
 // SetupRouter wires up HTTP routes and receives the AuditRepository for handlers to use
 func SetupRouter(db *pgxpool.Pool, rabbit *rabbitmq.Client, auditRepo *repository.AuditRepository, mpClient *mercadopago.Client, cfg config.Config, logger *slog.Logger) http.Handler {
 	r := mux.NewRouter()
+
+	// Middleware de rate limiting global (100 req/min por IP)
+	r.Use(httprate.LimitByIP(100, 1*time.Minute))
 
 	// Create Application struct with all dependencies (for future use)
 	_ = &Application{

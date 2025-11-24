@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/go-playground/validator/v10"
 	jwt "github.com/golang-jwt/jwt/v5"
+	"github.com/gorilla/mux"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 
@@ -270,5 +272,109 @@ func GetCurrentUser(db *pgxpool.Pool) http.HandlerFunc {
 			"role":       user.Role,
 			"created_at": user.CreatedAt,
 		})
+	}
+}
+
+// GetAllUsers retorna la lista de usuarios de la organización (solo para admin)
+func GetAllUsers(db *pgxpool.Pool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Obtener organization_id del admin autenticado
+		adminOrgID, ok := r.Context().Value("organization_id").(int64)
+		if !ok {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		um := &models.UserModel{DB: db}
+		users, err := um.GetAllByOrganization(adminOrgID)
+		if err != nil {
+			slog.Error("Failed to fetch users", "error", err, "organization_id", adminOrgID)
+			http.Error(w, "could not fetch users", http.StatusInternalServerError)
+			return
+		}
+
+		// Formatear respuesta sin password hashes
+		response := make([]map[string]any, len(users))
+		for i, user := range users {
+			response[i] = map[string]any{
+				"id":         user.ID,
+				"name":       user.Name,
+				"email":      user.Email,
+				"role":       user.Role,
+				"created_at": user.CreatedAt,
+			}
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(response)
+	}
+}
+
+// DeleteUser elimina un usuario de la organización (solo para admin)
+func DeleteUser(db *pgxpool.Pool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Obtener organization_id del admin autenticado
+		adminOrgID, ok := r.Context().Value("organization_id").(int64)
+		if !ok {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		// Obtener user_id del admin (para evitar auto-eliminación)
+		adminUserID, ok := r.Context().Value("user_id").(int64)
+		if !ok {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		// Extraer ID del usuario a eliminar de la URL usando gorilla/mux
+		vars := mux.Vars(r)
+		userIDStr := vars["id"]
+		if userIDStr == "" {
+			http.Error(w, "user id required", http.StatusBadRequest)
+			return
+		}
+
+		targetUserID, err := strconv.ParseInt(userIDStr, 10, 64)
+		if err != nil {
+			http.Error(w, "invalid user id", http.StatusBadRequest)
+			return
+		}
+
+		// Prevenir auto-eliminación
+		if targetUserID == adminUserID {
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]any{"error": "cannot delete yourself"})
+			return
+		}
+
+		um := &models.UserModel{DB: db}
+
+		// Verificar que el usuario pertenece a la organización del admin
+		targetUser, err := um.GetByID(targetUserID)
+		if err != nil {
+			if err == models.ErrNotFound {
+				http.Error(w, "user not found", http.StatusNotFound)
+				return
+			}
+			http.Error(w, "could not fetch user", http.StatusInternalServerError)
+			return
+		}
+
+		if targetUser.OrganizationID != adminOrgID {
+			http.Error(w, "user not found in your organization", http.StatusNotFound)
+			return
+		}
+
+		// Eliminar usuario
+		if err := um.Delete(targetUserID); err != nil {
+			slog.Error("Failed to delete user", "error", err, "user_id", targetUserID)
+			http.Error(w, "could not delete user", http.StatusInternalServerError)
+			return
+		}
+
+		slog.Info("User deleted", "user_id", targetUserID, "admin_id", adminUserID, "organization_id", adminOrgID)
+
+		w.WriteHeader(http.StatusNoContent)
 	}
 }

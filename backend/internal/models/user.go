@@ -139,3 +139,50 @@ func (m *UserModel) GetByID(id int64) (*User, error) {
 	}
 	return &u, nil
 }
+
+// GetAllByOrganization fetches all users belonging to an organization.
+func (m *UserModel) GetAllByOrganization(organizationID int64) ([]User, error) {
+	const q = `
+		SELECT id, name, email, password_hash, role, organization_id, created_at
+		FROM users
+		WHERE organization_id = $1
+		ORDER BY created_at DESC`
+
+	rows, err := m.DB.Query(context.Background(), q, organizationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []User
+	for rows.Next() {
+		var u User
+		if err := rows.Scan(&u.ID, &u.Name, &u.Email, &u.PasswordHash, &u.Role, &u.OrganizationID, &u.CreatedAt); err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return users, nil
+}
+
+// Delete removes a user from the database.
+func (m *UserModel) Delete(id int64) error {
+	const q = `DELETE FROM users WHERE id = $1`
+
+	result, err := m.DB.Exec(context.Background(), q, id)
+	if err != nil {
+		return err
+	}
+
+	rowsAffected := result.RowsAffected()
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+
+	return nil
+}

@@ -34,8 +34,16 @@ type Application struct {
 func SetupRouter(db *pgxpool.Pool, rabbit *rabbitmq.Client, auditRepo *repository.AuditRepository, mpClient *mercadopago.Client, cfg config.Config, logger *slog.Logger) http.Handler {
 	r := mux.NewRouter()
 
-	// Middleware de rate limiting global (100 req/min por IP)
-	r.Use(httprate.LimitByIP(100, 1*time.Minute))
+	// ============================================
+	// MIDDLEWARE GLOBAL: Rate Limiting (El Patovica Digital)
+	// ============================================
+	// Protección contra ataques DoS y fuerza bruta
+	// Límite: 100 peticiones por minuto por IP
+	// Respuesta automática: HTTP 429 Too Many Requests si se excede
+	r.Use(func(next http.Handler) http.Handler {
+		limiter := httprate.LimitByIP(100, 1*time.Minute)
+		return limiter(next)
+	})
 
 	// Create Application struct with all dependencies (for future use)
 	_ = &Application{
@@ -88,6 +96,18 @@ func SetupRouter(db *pgxpool.Pool, rabbit *rabbitmq.Client, auditRepo *repositor
 			middleware.RequireRole("admin")(handlersApp.CreateUserByAdminV2()),
 		),
 	).Methods("POST")
+
+	api.Handle("/admin/users",
+		withPaywall(
+			middleware.RequireRole("admin")(http.HandlerFunc(handlers.GetAllUsers(db))),
+		),
+	).Methods("GET")
+
+	api.Handle("/admin/users/{id:[0-9]+}",
+		withPaywall(
+			middleware.RequireRole("admin")(http.HandlerFunc(handlers.DeleteUser(db))),
+		),
+	).Methods("DELETE")
 
 	// RBAC Test endpoints (protected by JWT + Role middleware)
 	api.Handle("/test/admin-only",

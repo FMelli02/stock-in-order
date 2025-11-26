@@ -65,9 +65,13 @@ api.interceptors.response.use(
     if (error?.response?.status === 401 && typeof window !== 'undefined') {
       const currentPath = window.location.pathname
       
-      // NUNCA redirigir en /profile - dejar que el componente use AuthContext
-      if (currentPath.includes('/profile') || currentPath.includes('/mi-perfil')) {
-        console.warn('⚠️ 401 en /profile - ignorando (usando AuthContext)')
+      // NUNCA redirigir en páginas que manejan 401 gracefully
+      // Profile y Admin pages pueden mostrar errores sin desloguear
+      const gracefulPaths = ['/profile', '/mi-perfil', '/admin/users']
+      const shouldIgnore401 = gracefulPaths.some(path => currentPath.includes(path))
+      
+      if (shouldIgnore401) {
+        console.warn(`⚠️ 401 en ${currentPath} - ignorando (manejo graceful)`)
         return Promise.reject(error)
       }
       

@@ -1,6 +1,44 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  body {
+    @apply font-sans antialiased bg-neutral-50 text-neutral-900;
+    font-feature-settings: 'cv11', 'ss01';
+    font-variation-settings: 'opsz' 14;
+    letter-spacing: -0.011em;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display font-semibold tracking-tight;
+  }
+  
+  h1 {
+    @apply text-4xl md:text-5xl lg:text-6xl;
+    letter-spacing: -0.025em;
+  }
+  
+  h2 {
+    @apply text-3xl md:text-4xl lg:text-5xl;
+    letter-spacing: -0.02em;
+  }
+  
+  h3 {
+    @apply text-2xl md:text-3xl;
+    letter-spacing: -0.018em;
+  }
+  
+  h4 {
+    @apply text-xl md:text-2xl;
+  }
+  
+  button, input, select, textarea {
+    @apply font-sans;
+  }
+}
 
 @layer utilities {
   /* Animaciones de entrada */

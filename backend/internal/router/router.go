@@ -231,23 +231,23 @@ func SetupRouter(db *pgxpool.Pool, rabbit *rabbitmq.Client, auditRepo *repositor
 	// Lectura: Admin y Vendedor con suscripción activa (repositor NO puede ver clientes)
 	api.Handle("/customers",
 		withPaywall(
-			middleware.RequireRole("vendedor")(http.HandlerFunc(handlers.ListCustomers(db))),
+			middleware.RequireRole("admin", "vendedor")(http.HandlerFunc(handlers.ListCustomers(db))),
 		)).Methods("GET")
 	api.Handle("/customers/{id:[0-9]+}",
 		withPaywall(
-			middleware.RequireRole("vendedor")(http.HandlerFunc(handlers.GetCustomer(db))),
+			middleware.RequireRole("admin", "vendedor")(http.HandlerFunc(handlers.GetCustomer(db))),
 		)).Methods("GET")
 
 	// Creación: Admin y Vendedor (con auditoría y paywall)
 	api.Handle("/customers",
 		withPaywall(
-			middleware.RequireRole("vendedor")(handlersApp.CreateCustomerV2()),
+			middleware.RequireRole("admin", "vendedor")(handlersApp.CreateCustomerV2()),
 		)).Methods("POST")
 
 	// Actualización: Admin y Vendedor (con auditoría y paywall)
 	api.Handle("/customers/{id:[0-9]+}",
 		withPaywall(
-			middleware.RequireRole("vendedor")(handlersApp.UpdateCustomerV2()),
+			middleware.RequireRole("admin", "vendedor")(handlersApp.UpdateCustomerV2()),
 		)).Methods("PUT")
 
 	// Eliminación: Solo Admin (con auditoría y paywall)
@@ -262,15 +262,15 @@ func SetupRouter(db *pgxpool.Pool, rabbit *rabbitmq.Client, auditRepo *repositor
 	// Creación y Lectura: Admin y Vendedor con suscripción activa
 	api.Handle("/sales-orders",
 		withPaywall(
-			middleware.RequireRole("vendedor")(handlersApp.CreateSalesOrderV2()),
+			middleware.RequireRole("admin", "vendedor")(handlersApp.CreateSalesOrderV2()),
 		)).Methods("POST")
 	api.Handle("/sales-orders",
 		withPaywall(
-			middleware.RequireRole("vendedor")(http.HandlerFunc(handlers.GetSalesOrders(db))),
+			middleware.RequireRole("admin", "vendedor")(http.HandlerFunc(handlers.GetSalesOrders(db))),
 		)).Methods("GET")
 	api.Handle("/sales-orders/{id:[0-9]+}",
 		withPaywall(
-			middleware.RequireRole("vendedor")(http.HandlerFunc(handlers.GetSalesOrderByID(db))),
+			middleware.RequireRole("admin", "vendedor")(http.HandlerFunc(handlers.GetSalesOrderByID(db))),
 		)).Methods("GET")
 
 	// Solicitar PDF de orden de venta: Admin y Vendedor (con paywall)
@@ -281,7 +281,7 @@ func SetupRouter(db *pgxpool.Pool, rabbit *rabbitmq.Client, auditRepo *repositor
 	}
 	api.Handle("/sales-orders/{id:[0-9]+}/request-pdf",
 		withPaywall(
-			middleware.RequireRole("vendedor")(handlers.RequestSalesOrderPDFHandler(appContextPDF)),
+			middleware.RequireRole("admin", "vendedor")(handlers.RequestSalesOrderPDFHandler(appContextPDF)),
 		)).Methods("POST")
 
 	// ============================================
@@ -351,6 +351,13 @@ func SetupRouter(db *pgxpool.Pool, rabbit *rabbitmq.Client, auditRepo *repositor
 	api.Handle("/subscriptions/status",
 		middleware.JWTMiddleware(
 			http.HandlerFunc(handlers.GetSubscriptionStatusHandler(db)),
+			cfg.JWTSecret,
+		)).Methods("GET")
+
+	// Obtener estadísticas de uso (productos, órdenes, usuarios)
+	api.Handle("/subscriptions/usage",
+		middleware.JWTMiddleware(
+			http.HandlerFunc(handlers.GetSubscriptionUsageHandler(db)),
 			cfg.JWTSecret,
 		)).Methods("GET")
 

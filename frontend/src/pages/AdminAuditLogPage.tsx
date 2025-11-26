@@ -146,70 +146,70 @@ const AdminAuditLogPage: React.FC = () => {
   return (
     <div className="container mx-auto p-6">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-800">Registro de Auditoría</h1>
-        <p className="text-gray-600 mt-2">
+        <h1 className="text-3xl font-display font-bold text-neutral-900">Registro de Auditoría</h1>
+        <p className="text-neutral-600 mt-2">
           Visualiza todas las acciones realizadas en el sistema
         </p>
       </div>
 
       {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+        <div className="bg-red-50 border border-red-300 text-red-700 px-4 py-3 rounded-xl mb-4">
           {error}
         </div>
       )}
 
       {loading ? (
         <div className="flex justify-center items-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
         </div>
       ) : (
         <>
-          <div className="bg-white shadow-md rounded-lg overflow-hidden">
+          <div className="bg-white shadow-soft rounded-2xl border border-neutral-200 overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+              <table className="min-w-full divide-y divide-neutral-200">
+                <thead className="bg-neutral-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
                       Fecha y Hora
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
                       Usuario
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
                       Rol
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
                       Acción
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
                       Entidad
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
                       ID Entidad
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
                       Detalles
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className="bg-white divide-y divide-neutral-200">
                   {logs.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-6 py-4 text-center text-gray-500">
+                      <td colSpan={7} className="px-6 py-4 text-center text-neutral-500">
                         No hay registros de auditoría
                       </td>
                     </tr>
                   ) : (
                     logs.map((log) => (
-                      <tr key={log.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <tr key={log.id} className="hover:bg-neutral-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-900">
                           {formatTimestamp(log.timestamp)}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-900">
                           {log.user_email || 'Sistema'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-indigo-100 text-indigo-800">
+                          <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-primary-100 text-primary-800">
                             {log.user_role || 'N/A'}
                           </span>
                         </td>
@@ -222,13 +222,13 @@ const AdminAuditLogPage: React.FC = () => {
                             {getActionLabel(log.action)}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-900">
                           {getEntityTypeLabel(log.entity_type)}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-900">
                           {log.entity_id || 'N/A'}
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
+                        <td className="px-6 py-4 text-sm text-neutral-900 max-w-xs truncate">
                           {log.details || 'Sin detalles'}
                         </td>
                       </tr>
@@ -240,26 +240,26 @@ const AdminAuditLogPage: React.FC = () => {
           </div>
 
           {/* Paginación */}
-          <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6 mt-4 rounded-lg shadow-md">
+          <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-neutral-200 sm:px-6 mt-4 rounded-2xl shadow-soft">
             <div className="flex-1 flex justify-between sm:hidden">
               <button
                 onClick={handlePreviousPage}
                 disabled={offset === 0}
-                className={`relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md ${
+                className={`relative inline-flex items-center px-4 py-2 border border-neutral-300 text-sm font-medium rounded-xl ${
                   offset === 0
-                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                    : 'bg-white text-gray-700 hover:bg-gray-50'
+                    ? 'bg-neutral-100 text-neutral-400 cursor-not-allowed'
+                    : 'bg-white text-neutral-700 hover:bg-neutral-50'
                 }`}
               >
                 Anterior
               </button>
-              <button
-                onClick={handleNextPage}
-                disabled={offset + limit >= total}
-                className={`ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md ${
-                  offset + limit >= total
-                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                    : 'bg-white text-gray-700 hover:bg-gray-50'
+                <button
+                  onClick={handleNextPage}
+                  disabled={offset + limit >= total}
+                  className={`ml-3 relative inline-flex items-center px-4 py-2 border border-neutral-300 text-sm font-medium rounded-xl ${
+                    offset + limit >= total
+                      ? 'bg-neutral-100 text-neutral-400 cursor-not-allowed'
+                      : 'bg-white text-neutral-700 hover:bg-neutral-50'
                 }`}
               >
                 Siguiente
@@ -267,7 +267,7 @@ const AdminAuditLogPage: React.FC = () => {
             </div>
             <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
               <div>
-                <p className="text-sm text-gray-700">
+                <p className="text-sm text-neutral-700">
                   Mostrando <span className="font-medium">{offset + 1}</span> a{' '}
                   <span className="font-medium">
                     {Math.min(offset + limit, total)}
@@ -283,10 +283,10 @@ const AdminAuditLogPage: React.FC = () => {
                   <button
                     onClick={handlePreviousPage}
                     disabled={offset === 0}
-                    className={`relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 text-sm font-medium ${
+                    className={`relative inline-flex items-center px-2 py-2 rounded-l-xl border border-neutral-300 text-sm font-medium ${
                       offset === 0
-                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                        : 'bg-white text-gray-500 hover:bg-gray-50'
+                        ? 'bg-neutral-100 text-neutral-400 cursor-not-allowed'
+                        : 'bg-white text-neutral-500 hover:bg-neutral-50'
                     }`}
                   >
                     <span className="sr-only">Anterior</span>
@@ -304,16 +304,16 @@ const AdminAuditLogPage: React.FC = () => {
                       />
                     </svg>
                   </button>
-                  <span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">
+                  <span className="relative inline-flex items-center px-4 py-2 border border-neutral-300 bg-white text-sm font-medium text-neutral-700">
                     Página {currentPage} de {totalPages}
                   </span>
                   <button
                     onClick={handleNextPage}
                     disabled={offset + limit >= total}
-                    className={`relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 text-sm font-medium ${
+                    className={`relative inline-flex items-center px-2 py-2 rounded-r-xl border border-neutral-300 text-sm font-medium ${
                       offset + limit >= total
-                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                        : 'bg-white text-gray-500 hover:bg-gray-50'
+                        ? 'bg-neutral-100 text-neutral-400 cursor-not-allowed'
+                        : 'bg-white text-neutral-500 hover:bg-neutral-50'
                     }`}
                   >
                     <span className="sr-only">Siguiente</span>

@@ -68,7 +68,7 @@ const InstallPWA = () => {
   return (
     <button
       onClick={handleInstallClick}
-      className="flex items-center gap-3 px-4 py-3 w-full text-left bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white rounded-lg transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-[1.02]"
+      className="flex items-center gap-3 px-4 py-2.5 w-full text-left bg-primary-600 hover:bg-primary-700 text-white rounded-xl transition-all duration-200 shadow-soft text-sm font-medium"
       aria-label="Instalar aplicación"
     >
       <span className="text-2xl">⬇️</span>

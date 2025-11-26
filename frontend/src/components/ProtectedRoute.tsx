@@ -9,15 +9,10 @@ export default function ProtectedRoute() {
   // Esperar a que el AuthContext termine de cargar
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+      <div className="flex items-center justify-center min-h-screen bg-neutral-50">
         <div className="text-center">
-          <div className="relative inline-flex">
-            <div className="w-16 h-16 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
-            <div className="absolute inset-0 flex items-center justify-center">
-              <span className="text-2xl">📦</span>
-            </div>
-          </div>
-          <p className="mt-4 text-lg font-semibold text-slate-700">Cargando...</p>
+          <div className="w-12 h-12 border-3 border-neutral-200 border-t-primary-600 rounded-full animate-spin mb-4"></div>
+          <p className="text-sm font-medium text-neutral-600">Cargando...</p>
         </div>
       </div>
     )

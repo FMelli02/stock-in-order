@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 
+	"stock-in-order/backend/internal/middleware"
 	"stock-in-order/backend/internal/models"
 )
 
@@ -239,15 +240,9 @@ func CreateUserByAdmin(db *pgxpool.Pool) http.HandlerFunc {
 func GetCurrentUser(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Obtener user_id del contexto (inyectado por JWTMiddleware)
-		userIDValue := r.Context().Value("user_id")
-		if userIDValue == nil {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			return
-		}
-
-		userID, ok := userIDValue.(int64)
+		userID, ok := middleware.UserIDFromContext(r.Context())
 		if !ok {
-			http.Error(w, "invalid user_id in context", http.StatusInternalServerError)
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 
@@ -279,7 +274,7 @@ func GetCurrentUser(db *pgxpool.Pool) http.HandlerFunc {
 func GetAllUsers(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Obtener organization_id del admin autenticado
-		adminOrgID, ok := r.Context().Value("organization_id").(int64)
+		adminOrgID, ok := middleware.OrganizationIDFromContext(r.Context())
 		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return

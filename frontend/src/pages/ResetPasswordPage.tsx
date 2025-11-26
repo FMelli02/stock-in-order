@@ -71,26 +71,26 @@ export default function ResetPasswordPage() {
 
   if (!token) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-lg shadow-xl p-8">
+      <div className="min-h-screen bg-neutral-50 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-soft-lg border border-neutral-200 p-8">
           <div className="text-center">
-            <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-red-100 mb-4">
+            <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-2xl bg-red-100 mb-4">
               <svg className="h-8 w-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </div>
             
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+            <h2 className="text-2xl font-display font-bold text-neutral-900 mb-2">
               Enlace no válido
             </h2>
             
-            <p className="text-gray-600 mb-6">
+            <p className="text-neutral-600 mb-6">
               El enlace de recuperación no es válido o ha expirado.
             </p>
             
             <Link 
               to="/forgot-password" 
-              className="inline-block w-full py-3 px-4 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
+              className="inline-block w-full py-3 px-4 bg-primary-600 text-white rounded-xl hover:bg-primary-700 transition-colors font-medium shadow-soft"
             >
               Solicitar nuevo enlace
             </Link>
@@ -102,26 +102,26 @@ export default function ResetPasswordPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-lg shadow-xl p-8">
+      <div className="min-h-screen bg-neutral-50 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-soft-lg border border-neutral-200 p-8">
           <div className="text-center">
-            <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-100 mb-4">
+            <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-2xl bg-emerald-100 mb-4">
               <svg className="h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             </div>
             
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+            <h2 className="text-2xl font-display font-bold text-neutral-900 mb-2">
               ¡Contraseña restablecida!
             </h2>
             
-            <p className="text-gray-600 mb-6">
+            <p className="text-neutral-600 mb-6">
               Tu contraseña ha sido actualizada correctamente. Serás redirigido al inicio de sesión...
             </p>
             
             <Link 
               to="/login" 
-              className="inline-block w-full py-3 px-4 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
+              className="inline-block w-full py-3 px-4 bg-primary-600 text-white rounded-xl hover:bg-primary-700 transition-colors font-medium shadow-soft"
             >
               Ir al inicio de sesión
             </Link>
@@ -132,20 +132,20 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-lg shadow-xl p-8">
+    <div className="min-h-screen bg-neutral-50 flex items-center justify-center p-4">
+      <div className="max-w-md w-full bg-white rounded-2xl shadow-soft-lg border border-neutral-200 p-8">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+          <h1 className="text-3xl font-display font-bold text-neutral-900 mb-2">
             Nueva contraseña
           </h1>
-          <p className="text-gray-600">
+          <p className="text-neutral-600">
             Ingresa tu nueva contraseña para restablecer tu cuenta.
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="newPassword" className="block text-sm font-medium text-neutral-700 mb-2">
               Nueva contraseña
             </label>
             <input
@@ -157,12 +157,12 @@ export default function ResetPasswordPage() {
               autoFocus
               minLength={6}
               placeholder="Mínimo 6 caracteres"
-              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+              className="w-full px-4 py-2.5 rounded-xl border border-neutral-300 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition"
             />
           </div>
 
           <div>
-            <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="confirmPassword" className="block text-sm font-medium text-neutral-700 mb-2">
               Confirmar contraseña
             </label>
             <input
@@ -173,14 +173,14 @@ export default function ResetPasswordPage() {
               required
               minLength={6}
               placeholder="Repite tu contraseña"
-              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+              className="w-full px-4 py-2.5 rounded-xl border border-neutral-300 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition"
             />
           </div>
 
           {newPassword && confirmPassword && newPassword !== confirmPassword && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+            <div className="bg-red-50 border border-red-200 rounded-xl p-3">
               <p className="text-sm text-red-800">
-                ⚠️ Las contraseñas no coinciden
+                Las contraseñas no coinciden
               </p>
             </div>
           )}
@@ -188,7 +188,7 @@ export default function ResetPasswordPage() {
           <button
             type="submit"
             disabled={loading || !newPassword || !confirmPassword || newPassword !== confirmPassword}
-            className="w-full py-3 px-4 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+            className="w-full py-3 px-4 bg-primary-600 text-white rounded-xl hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium shadow-soft"
           >
             {loading ? 'Restableciendo...' : 'Restablecer contraseña'}
           </button>
@@ -197,7 +197,7 @@ export default function ResetPasswordPage() {
         <div className="mt-6 text-center">
           <Link 
             to="/login" 
-            className="text-sm text-indigo-600 hover:text-indigo-500"
+            className="text-sm text-primary-600 hover:text-primary-700"
           >
             ← Volver al inicio de sesión
           </Link>

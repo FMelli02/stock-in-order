@@ -92,7 +92,7 @@ export default function SuppliersPage() {
                 toast.dismiss(t.id)
                 resolve(true)
               }}
-              className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700"
+              className="px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium transition-all text-xs"
             >
               Eliminar
             </button>
@@ -133,57 +133,67 @@ export default function SuppliersPage() {
   }
 
   return (
-    <div className="p-4">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold">Proveedores</h1>
-        <div className="flex gap-2">
+    <div className="p-8">
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-3xl font-display font-semibold text-neutral-900 mb-2">Proveedores</h1>
+          <p className="text-neutral-600 text-sm">Gestiona tus proveedores y contactos</p>
+        </div>
+        <div className="flex gap-3">
           <button
             onClick={handleRequestReportByEmail}
-            className="px-4 py-2 rounded bg-purple-600 text-white hover:bg-purple-700 flex items-center gap-2"
+            className="px-4 py-2.5 rounded-xl bg-neutral-100 hover:bg-neutral-200 text-neutral-900 font-medium transition-all border border-neutral-300 flex items-center gap-2 text-sm"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
               <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
               <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
             </svg>
             Recibir por Email
           </button>
-          <button onClick={openCreateModal} className="px-4 py-2 rounded bg-green-600 text-white hover:bg-green-700">
+          <button onClick={openCreateModal} className="px-4 py-2.5 rounded-xl bg-primary-600 hover:bg-primary-700 text-white font-medium transition-all shadow-soft hover:shadow-soft-lg text-sm">
             Crear Nuevo Proveedor
           </button>
         </div>
       </div>
 
-      {loading && <p className="text-gray-600">Cargando proveedores...</p>}
-      {error && <p className="text-red-600">{error}</p>}
+      {loading && (
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <div className="w-10 h-10 border-3 border-neutral-200 border-t-primary-600 rounded-full animate-spin mb-3 mx-auto"></div>
+            <p className="text-sm text-neutral-600">Cargando proveedores...</p>
+          </div>
+        </div>
+      )}
+      {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">{error}</div>}
       {!loading && !error && (
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+        <div className="bg-white rounded-2xl border border-neutral-200 shadow-soft overflow-hidden">
+          <table className="min-w-full divide-y divide-neutral-200">
+            <thead className="bg-neutral-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nombre</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Persona de Contacto</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Teléfono</th>
-                <th className="px-6 py-3" />
+                <th className="px-6 py-4 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Nombre</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Persona de Contacto</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Email</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Teléfono</th>
+                <th className="px-6 py-4" />
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="divide-y divide-neutral-100">
               {suppliers.map((s) => (
-                <tr key={s.id}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{s.name}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{s.contact_person}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{s.email}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{s.phone}</td>
+                <tr key={s.id} className="hover:bg-neutral-50 transition-colors">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-neutral-900">{s.name}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-600">{s.contact_person}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-600">{s.email}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-600">{s.phone}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
                     <button
                       onClick={() => openEditModal(s)}
-                      className="mr-2 px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
+                      className="mr-2 px-3 py-1.5 rounded-lg bg-primary-600 text-white hover:bg-primary-700 font-medium transition-all text-xs"
                     >
                       Editar
                     </button>
                     <button
                       onClick={() => handleDelete(s)}
-                      className="px-3 py-1 rounded bg-red-600 text-white hover:bg-red-700"
+                      className="px-3 py-1.5 rounded-lg bg-red-600 text-white hover:bg-red-700 font-medium transition-all text-xs"
                     >
                       Eliminar
                     </button>
@@ -192,7 +202,7 @@ export default function SuppliersPage() {
               ))}
               {suppliers.length === 0 && (
                 <tr>
-                  <td className="px-6 py-4 text-sm text-gray-500" colSpan={5}>
+                  <td className="px-6 py-8 text-sm text-neutral-500 text-center" colSpan={5}>
                     No hay proveedores para mostrar.
                   </td>
                 </tr>

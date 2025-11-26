@@ -41,10 +41,10 @@ const ScannerFAB = () => {
       {/* Botón flotante - Fixed position en la esquina inferior derecha */}
       <button
         onClick={handleClick}
-        className="fixed bottom-6 right-6 z-50 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white rounded-full shadow-2xl hover:shadow-xl transition-all duration-300 transform hover:scale-110 active:scale-95 p-4 min-w-[56px] min-h-[56px] flex items-center justify-center touch-manipulation"
+        className="fixed bottom-6 right-6 z-50 bg-primary-600 hover:bg-primary-700 text-white rounded-full shadow-soft-xl hover:shadow-soft-xl transition-all duration-200 transform hover:scale-105 active:scale-95 p-4 min-w-[56px] min-h-[56px] flex items-center justify-center touch-manipulation"
         aria-label="Escanear código de barras"
       >
-        <Camera className="w-6 h-6" strokeWidth={2.5} />
+        <Camera className="w-6 h-6" strokeWidth={2} />
       </button>
 
       {/* Tooltip opcional que aparece brevemente */}

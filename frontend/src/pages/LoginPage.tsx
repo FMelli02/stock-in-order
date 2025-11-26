@@ -35,87 +35,68 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-100 via-purple-50 to-pink-100 py-12 px-4 sm:px-6 lg:px-8">
-      {/* Círculos decorativos de fondo */}
-      <div className="absolute top-0 left-0 w-72 h-72 bg-indigo-300 rounded-full mix-blend-multiply filter blur-xl opacity-30 animate-pulse"></div>
-      <div className="absolute top-0 right-0 w-72 h-72 bg-purple-300 rounded-full mix-blend-multiply filter blur-xl opacity-30 animate-pulse animation-delay-2000"></div>
-      <div className="absolute bottom-0 left-1/2 w-72 h-72 bg-pink-300 rounded-full mix-blend-multiply filter blur-xl opacity-30 animate-pulse animation-delay-4000"></div>
+    <div className="min-h-screen flex items-center justify-center bg-neutral-50 py-12 px-4 sm:px-6 lg:px-8">
       
-      <div className="relative w-full max-w-md">
+      <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-3xl shadow-2xl mb-4 transform hover:scale-110 transition-transform">
-            <span className="text-4xl">📦</span>
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-primary-600 rounded-2xl shadow-soft-lg mb-4">
+            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+            </svg>
           </div>
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">Stock In Order</h1>
-          <p className="text-gray-600">Gestión inteligente de inventario</p>
+          <h1 className="text-3xl font-display font-semibold text-neutral-900 mb-2">Stock in Order</h1>
+          <p className="text-neutral-600 text-sm font-light">Gestión integral de inventario</p>
         </div>
 
         {/* Tarjeta de Login */}
-        <div className="bg-white/80 backdrop-blur-xl p-8 rounded-3xl shadow-2xl border border-white/20">
-          <div className="mb-6">
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">¡Bienvenido de nuevo!</h2>
-            <p className="text-gray-600">Ingresa tus credenciales para continuar</p>
+        <div className="bg-white p-8 rounded-2xl shadow-soft-lg border border-neutral-200">
+          <div className="mb-8">
+            <h2 className="text-2xl font-display font-semibold text-neutral-900 mb-2">Bienvenido</h2>
+            <p className="text-neutral-600 text-sm">Ingresa tus credenciales para continuar</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
             {error && (
-              <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl">
-                <div className="flex items-center gap-2">
-                  <span className="text-red-500 text-xl">⚠️</span>
-                  <p className="text-sm text-red-700 font-medium">{error}</p>
-                </div>
+              <div className="bg-red-50 border border-red-200 p-4 rounded-xl">
+                <p className="text-sm text-red-700 font-medium">{error}</p>
               </div>
             )}
             
             <div>
-              <label htmlFor="email" className="block text-sm font-semibold text-gray-700 mb-2">
+              <label htmlFor="email" className="block text-sm font-medium text-neutral-700 mb-2">
                 Correo Electrónico
               </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                  </svg>
-                </div>
-                <input
-                  id="email"
-                  type="email"
-                  placeholder="tu@email.com"
-                  className="pl-10 block w-full rounded-xl border-2 border-gray-200 py-3 px-4 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 transition-all"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
-              </div>
+              <input
+                id="email"
+                type="email"
+                placeholder="tu@email.com"
+                className="w-full px-4 py-3 border border-neutral-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all text-sm placeholder:text-neutral-400"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
             </div>
             
             <div>
-              <label htmlFor="password" className="block text-sm font-semibold text-gray-700 mb-2">
+              <label htmlFor="password" className="block text-sm font-medium text-neutral-700 mb-2">
                 Contraseña
               </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                  </svg>
-                </div>
-                <input
-                  id="password"
-                  type="password"
-                  placeholder="••••••••"
-                  className="pl-10 block w-full rounded-xl border-2 border-gray-200 py-3 px-4 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 transition-all"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                />
-              </div>
+              <input
+                id="password"
+                type="password"
+                placeholder="••••••••"
+                className="w-full px-4 py-3 border border-neutral-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all text-sm placeholder:text-neutral-400"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
             </div>
 
             <div className="flex items-center justify-end">
               <Link 
                 to="/forgot-password" 
-                className="text-sm font-medium text-indigo-600 hover:text-indigo-700 transition-colors"
+                className="text-sm font-medium text-primary-600 hover:text-primary-700 transition-colors"
               >
                 ¿Olvidaste tu contraseña?
               </Link>
@@ -124,7 +105,7 @@ export default function LoginPage() {
             <button 
               type="submit" 
               disabled={loading}
-              className="w-full py-3 px-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-xl hover:from-indigo-700 hover:to-purple-700 focus:outline-none focus:ring-4 focus:ring-indigo-200 shadow-lg transform transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+              className="w-full py-3 px-4 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-xl transition-all shadow-soft hover:shadow-soft-lg disabled:opacity-50 disabled:cursor-not-allowed text-sm"
             >
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
@@ -141,9 +122,9 @@ export default function LoginPage() {
           </form>
 
           <div className="mt-6 text-center">
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-neutral-600">
               ¿No tienes cuenta?{' '}
-              <Link to="/register" className="font-semibold text-indigo-600 hover:text-indigo-700 transition-colors">
+              <Link to="/register" className="font-medium text-primary-600 hover:text-primary-700 transition-colors">
                 Crear cuenta
               </Link>
             </p>
@@ -152,9 +133,9 @@ export default function LoginPage() {
 
         {/* Footer */}
         <div className="mt-8 text-center">
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-neutral-500">
             ¿Necesitas ayuda? Contacta a{' '}
-            <a href="mailto:soporte@stockinorder.com" className="font-medium text-indigo-600 hover:text-indigo-700">
+            <a href="mailto:soporte@stockinorder.com" className="font-medium text-primary-600 hover:text-primary-700">
               soporte@stockinorder.com
             </a>
           </p>

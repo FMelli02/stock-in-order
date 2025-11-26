@@ -108,42 +108,45 @@ export default function PurchaseOrdersPage() {
   }
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold">Órdenes de Compra</h1>
-        <Link to="/purchase-orders/new" className="inline-block px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">
+    <div className="p-8">
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-3xl font-display font-semibold text-neutral-900 mb-2">Órdenes de Compra</h1>
+          <p className="text-neutral-600 text-sm">Gestiona tus compras y proveedores</p>
+        </div>
+        <Link to="/purchase-orders/new" className="px-4 py-2.5 rounded-xl bg-primary-600 hover:bg-primary-700 text-white font-medium transition-all shadow-soft hover:shadow-soft-lg text-sm">
           Crear Nueva Compra
         </Link>
       </div>
 
       {/* Sección de Filtros y Exportación */}
-      <div className="bg-white p-4 rounded shadow mb-4">
-        <h2 className="text-lg font-semibold mb-3">Exportar a Excel</h2>
+      <div className="bg-white rounded-2xl border border-neutral-200 shadow-soft p-6 mb-6">
+        <h2 className="text-lg font-display font-semibold text-neutral-900 mb-4">Exportar a Excel</h2>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Fecha Desde</label>
+            <label className="block text-sm font-medium text-neutral-700 mb-2">Fecha Desde</label>
             <input
               type="date"
               value={filterDateFrom}
               onChange={(e) => setFilterDateFrom(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-4 py-2.5 border border-neutral-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all text-sm"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Fecha Hasta</label>
+            <label className="block text-sm font-medium text-neutral-700 mb-2">Fecha Hasta</label>
             <input
               type="date"
               value={filterDateTo}
               onChange={(e) => setFilterDateTo(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-4 py-2.5 border border-neutral-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all text-sm"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Estado</label>
+            <label className="block text-sm font-medium text-neutral-700 mb-2">Estado</label>
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-4 py-2.5 border border-neutral-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all text-sm"
             >
               <option value="">Todos</option>
               <option value="pending">Pendiente</option>
@@ -154,9 +157,9 @@ export default function PurchaseOrdersPage() {
           <div className="flex items-end">
             <button
               onClick={handleExportExcel}
-              className="w-full px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center justify-center gap-2"
+              className="w-full px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-medium transition-all shadow-soft flex items-center justify-center gap-2 text-sm"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
               </svg>
               Exportar Excel

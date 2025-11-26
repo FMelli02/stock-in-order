@@ -124,9 +124,9 @@ export default function IntegrationsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
       </div>
-    );
+    )
   }
 
   const mercadolibreIntegration = integrations.find(
@@ -137,15 +137,15 @@ export default function IntegrationsPage() {
     <div className="container mx-auto p-6">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Integraciones</h1>
-        <p className="text-gray-600 mt-2">
+        <h1 className="text-3xl font-display font-bold text-neutral-900">Integraciones</h1>
+        <p className="text-neutral-600 mt-2">
           Conecta tu cuenta con plataformas de venta para sincronizar productos e inventario.
         </p>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {/* Mercado Libre Card */}
-        <div className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-200 hover:shadow-lg transition-shadow">
+        <div className="bg-white rounded-2xl shadow-soft overflow-hidden border border-neutral-200 hover:shadow-soft-lg transition-shadow">
           {/* Header con icono */}
           <div className="bg-gradient-to-r from-yellow-400 to-yellow-500 p-6">
             <div className="flex items-center gap-3 text-white">
@@ -207,9 +207,9 @@ export default function IntegrationsPage() {
                 {/* Botones */}
                 <div className="flex gap-2 pt-4">
                   {mercadolibreIntegration.is_expired && (
-                    <button
-                      onClick={handleConnectMercadoLibre}
-                      className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center justify-center gap-2"
+                  <button
+                    onClick={handleConnectMercadoLibre}
+                    className="flex-1 bg-primary-600 text-white px-4 py-2 rounded-xl hover:bg-primary-700 transition-colors font-medium flex items-center justify-center gap-2 shadow-soft"
                     >
                       <svg
                         className="h-4 w-4"
@@ -238,7 +238,7 @@ export default function IntegrationsPage() {
                     disabled={deleting === mercadolibreIntegration.id}
                     className={`${
                       mercadolibreIntegration.is_expired ? "" : "flex-1"
-                    } bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed`}
+                    } bg-red-600 text-white px-4 py-2 rounded-xl hover:bg-red-700 transition-colors font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-soft`}
                   >
                     {deleting === mercadolibreIntegration.id ? (
                       <>
@@ -275,7 +275,7 @@ export default function IntegrationsPage() {
                 
                 <button
                   onClick={handleConnectMercadoLibre}
-                  className="w-full bg-blue-600 text-white px-4 py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center justify-center gap-2"
+                  className="w-full bg-primary-600 text-white px-4 py-3 rounded-xl hover:bg-primary-700 transition-colors font-medium flex items-center justify-center gap-2 shadow-soft"
                 >
                   <svg
                     className="h-5 w-5"
@@ -298,7 +298,7 @@ export default function IntegrationsPage() {
         </div>
 
         {/* Shopify - Próximamente */}
-        <div className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-200 opacity-60">
+        <div className="bg-white rounded-2xl shadow-soft overflow-hidden border border-neutral-200 opacity-60">
           <div className="bg-gradient-to-r from-green-500 to-green-600 p-6">
             <div className="flex items-center gap-3 text-white">
               <svg className="h-10 w-10" fill="currentColor" viewBox="0 0 24 24">
@@ -321,7 +321,7 @@ export default function IntegrationsPage() {
         </div>
 
         {/* WooCommerce - Próximamente */}
-        <div className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-200 opacity-60">
+        <div className="bg-white rounded-2xl shadow-soft overflow-hidden border border-neutral-200 opacity-60">
           <div className="bg-gradient-to-r from-purple-500 to-purple-600 p-6">
             <div className="flex items-center gap-3 text-white">
               <svg className="h-10 w-10" fill="currentColor" viewBox="0 0 24 24">

@@ -164,15 +164,18 @@ export default function ProductsPage() {
   })
 
   return (
-    <div className="p-4">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold">Productos</h1>
-        <div className="flex gap-2">
+    <div className="p-8">
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-3xl font-display font-semibold text-neutral-900 mb-2">Productos</h1>
+          <p className="text-neutral-600 text-sm">Gestiona tu inventario y catálogo</p>
+        </div>
+        <div className="flex gap-3">
           <button
             onClick={handleRequestReportByEmail}
-            className="px-4 py-2 rounded bg-purple-600 text-white hover:bg-purple-700 flex items-center gap-2"
+            className="px-4 py-2.5 rounded-xl bg-neutral-100 hover:bg-neutral-200 text-neutral-900 font-medium transition-all border border-neutral-300 flex items-center gap-2 text-sm"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
               <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
               <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
             </svg>
@@ -180,7 +183,7 @@ export default function ProductsPage() {
           </button>
           <button
             onClick={openCreateModal}
-            className="px-4 py-2 rounded bg-green-600 text-white hover:bg-green-700"
+            className="px-4 py-2.5 rounded-xl bg-primary-600 hover:bg-primary-700 text-white font-medium transition-all shadow-soft hover:shadow-soft-lg text-sm"
           >
             Crear Nuevo Producto
           </button>
@@ -188,17 +191,17 @@ export default function ProductsPage() {
       </div>
 
       {/* Campo de búsqueda */}
-      <div className="mb-4">
+      <div className="mb-6">
         <div className="relative">
           <input
             type="text"
             placeholder="Buscar por nombre o SKU..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full px-4 py-2 pl-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-4 py-3 pl-11 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all text-sm placeholder:text-neutral-400"
           />
           <svg
-            className="absolute left-3 top-2.5 h-5 w-5 text-gray-400"
+            className="absolute left-4 top-3.5 h-5 w-5 text-neutral-400"
             xmlns="http://www.w3.org/2000/svg"
             viewBox="0 0 20 20"
             fill="currentColor"
@@ -212,7 +215,7 @@ export default function ProductsPage() {
           {searchTerm && (
             <button
               onClick={() => setSearchTerm('')}
-              className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
+              className="absolute right-4 top-3.5 text-neutral-400 hover:text-neutral-600 transition-colors"
             >
               <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
                 <path
@@ -225,56 +228,80 @@ export default function ProductsPage() {
           )}
         </div>
         {searchTerm && (
-          <p className="mt-2 text-sm text-gray-600">
+          <p className="mt-2 text-sm text-neutral-600">
             Mostrando {filteredProducts.length} de {products.length} productos
           </p>
         )}
       </div>
 
-      {loading && <p className="text-gray-600">Cargando productos...</p>}
-      {error && <p className="text-red-600">{error}</p>}
+      {loading && (
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <div className="w-10 h-10 border-3 border-neutral-200 border-t-primary-600 rounded-full animate-spin mb-3 mx-auto"></div>
+            <p className="text-sm text-neutral-600">Cargando productos...</p>
+          </div>
+        </div>
+      )}
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
+          {error}
+        </div>
+      )}
       {!loading && !error && (
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+        <div className="bg-white rounded-2xl border border-neutral-200 shadow-soft overflow-hidden">
+          <table className="min-w-full divide-y divide-neutral-200">
+            <thead className="bg-neutral-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nombre</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SKU</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock Actual</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock Mínimo</th>
-                <th className="px-6 py-3" />
+                <th className="px-6 py-4 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Nombre</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">SKU</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Stock Actual</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-neutral-700 uppercase tracking-wider">Stock Mínimo</th>
+                <th className="px-6 py-4" />
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="divide-y divide-neutral-100">
               {filteredProducts.map((p) => {
                 const isLowStock = p.quantity <= p.stock_minimo
+                const isOutOfStock = p.quantity === 0
+                
+                // Determinar el color de fondo según el nivel de stock
+                let rowBgClass = 'hover:bg-neutral-50 transition-colors'
+                if (isOutOfStock) {
+                  rowBgClass = 'bg-red-50/50 hover:bg-red-50'
+                } else if (isLowStock) {
+                  rowBgClass = 'bg-amber-50/30 hover:bg-amber-50'
+                }
+                
                 return (
-                  <tr key={p.id} className={isLowStock ? 'bg-red-50' : ''}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <tr key={p.id} className={rowBgClass}>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-neutral-900">
                       {p.name}
-                      {isLowStock && (
-                        <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
-                          ⚠️ Stock Bajo
-                        </span>
-                      )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{p.sku}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-600">{p.sku}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      <span className={isLowStock ? 'font-bold text-red-600' : 'text-gray-900'}>
+                      <span className={isLowStock ? 'font-semibold text-red-600' : 'text-neutral-900'}>
                         {p.quantity}
+                        {isLowStock && (
+                          <span 
+                            className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700"
+                            title="Stock por debajo del mínimo definido"
+                          >
+                            Bajo stock
+                          </span>
+                        )}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{p.stock_minimo}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-600">{p.stock_minimo}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
                       <button
                         onClick={() => openEditModal(p)}
-                        className="mr-2 px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
+                        className="mr-2 px-3 py-1.5 rounded-lg bg-primary-600 text-white hover:bg-primary-700 font-medium transition-all text-xs"
                       >
                         Editar
                       </button>
                       <button
                         onClick={() => handleDelete(p)}
-                        className="px-3 py-1 rounded bg-red-600 text-white hover:bg-red-700"
+                        className="px-3 py-1.5 rounded-lg bg-red-600 text-white hover:bg-red-700 font-medium transition-all text-xs"
                       >
                         Eliminar
                       </button>

@@ -383,3 +383,64 @@ func getPlanDescription(planID models.PlanID) string {
 		return ""
 	}
 }
+
+// GetSubscriptionUsageHandler returns usage statistics for the current user
+func GetSubscriptionUsageHandler(db *pgxpool.Pool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Get organization ID from context
+		organizationID, ok := middleware.OrganizationIDFromContext(r.Context())
+		if !ok {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		// Count products (user_id en products representa organization_id)
+		var productsCount int
+		err := db.QueryRow(r.Context(),
+			"SELECT COUNT(*) FROM products WHERE user_id = $1 AND deleted_at IS NULL",
+			organizationID,
+		).Scan(&productsCount)
+		if err != nil {
+			slog.Error("Error counting products", "error", err, "organizationID", organizationID)
+			productsCount = 0
+		}
+
+		// Count orders this month (sales + purchase)
+		var ordersThisMonth int
+		err = db.QueryRow(r.Context(), `
+			SELECT COUNT(*) FROM (
+				SELECT id FROM sales_orders 
+				WHERE user_id = $1 
+				AND created_at >= date_trunc('month', NOW())
+				UNION ALL
+				SELECT id FROM purchase_orders 
+				WHERE user_id = $1 
+				AND created_at >= date_trunc('month', NOW())
+			) AS orders
+		`, organizationID).Scan(&ordersThisMonth)
+		if err != nil {
+			slog.Error("Error counting orders", "error", err, "organizationID", organizationID)
+			ordersThisMonth = 0
+		}
+
+		// Count users in organization
+		var usersCount int
+		err = db.QueryRow(r.Context(),
+			"SELECT COUNT(*) FROM users WHERE organization_id = $1",
+			organizationID,
+		).Scan(&usersCount)
+		if err != nil {
+			slog.Error("Error counting users", "error", err, "organizationID", organizationID)
+			usersCount = 1 // Al menos el usuario actual
+		}
+
+		response := map[string]int{
+			"products_count":    productsCount,
+			"orders_this_month": ordersThisMonth,
+			"users_count":       usersCount,
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	}
+}

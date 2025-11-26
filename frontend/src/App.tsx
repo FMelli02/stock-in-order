@@ -47,6 +47,7 @@ const router = createBrowserRouter([
           { path: 'purchase-orders/:id', element: <PurchaseOrderDetailPage /> },
           { path: 'integrations', element: <IntegrationsPage /> }, // Integraciones (Mercado Libre, etc.)
           { path: 'scanner', element: <ScannerPage /> }, // Scanner de código de barras
+          { path: 'pricing', element: <PricingPage /> }, // Página de precios
           { path: 'billing', element: <BillingPage /> }, // Facturación y suscripción
           { path: 'profile', element: <ProfilePage /> }, // Perfil de usuario
           { path: 'admin/users', element: <AdminUsersPage /> }, // Admin only
@@ -60,7 +61,6 @@ const router = createBrowserRouter([
   { path: '/register', element: <RegisterPage /> },
   { path: '/forgot-password', element: <ForgotPasswordPage /> },
   { path: '/reset-password', element: <ResetPasswordPage /> },
-  { path: '/pricing', element: <PricingPage /> }, // Página de precios (pública)
 ])
 
 function App() {

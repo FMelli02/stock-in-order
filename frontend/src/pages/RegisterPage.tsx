@@ -231,7 +231,7 @@ export default function RegisterPage() {
             <button 
               type="submit" 
               disabled={submitting}
-              className="w-full py-3 px-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-xl hover:from-indigo-700 hover:to-purple-700 focus:outline-none focus:ring-4 focus:ring-indigo-200 shadow-lg transform transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+              className="w-full py-3 px-4 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-xl transition-all shadow-soft hover:shadow-soft-lg disabled:opacity-50 disabled:cursor-not-allowed text-sm"
             >
               {submitting ? (
                 <span className="flex items-center justify-center gap-2">
@@ -248,9 +248,9 @@ export default function RegisterPage() {
           </form>
 
           <div className="mt-6 text-center">
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-neutral-600">
               ¿Ya tienes cuenta?{' '}
-              <Link to="/login" className="font-semibold text-indigo-600 hover:text-indigo-700 transition-colors">
+              <Link to="/login" className="font-medium text-primary-600 hover:text-primary-700 transition-colors">
                 Iniciar sesión
               </Link>
             </p>
@@ -259,9 +259,9 @@ export default function RegisterPage() {
 
         {/* Footer */}
         <div className="mt-8 text-center">
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-neutral-500">
             Al registrarte, aceptas nuestros{' '}
-            <a href="#" className="font-medium text-indigo-600 hover:text-indigo-700">
+            <a href="#" className="font-medium text-primary-600 hover:text-primary-700">
               términos y condiciones
             </a>
           </p>

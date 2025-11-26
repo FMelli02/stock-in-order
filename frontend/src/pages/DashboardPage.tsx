@@ -61,17 +61,23 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="p-6">
-      <h1 className="text-3xl font-bold mb-6">Dashboard - Resumen del Negocio</h1>
+    <div className="p-8">
+      <div className="mb-8">
+        <h1 className="text-3xl font-display font-semibold text-neutral-900 mb-2">Dashboard</h1>
+        <p className="text-neutral-600 text-sm">Resumen del negocio y métricas clave</p>
+      </div>
       
       {loading && (
         <div className="flex items-center justify-center h-64">
-          <p className="text-lg text-gray-600">Cargando dashboard...</p>
+          <div className="text-center">
+            <div className="w-10 h-10 border-3 border-neutral-200 border-t-primary-600 rounded-full animate-spin mb-3 mx-auto"></div>
+            <p className="text-sm text-neutral-600">Cargando dashboard...</p>
+          </div>
         </div>
       )}
       
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
           {error}
         </div>
       )}
@@ -79,7 +85,7 @@ export default function DashboardPage() {
       {!loading && !error && kpis && chartData && (
         <>
           {/* KPIs Section */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <MetricCard 
               title="Total de Productos" 
               value={kpis.total_products} 
@@ -87,26 +93,27 @@ export default function DashboardPage() {
             <MetricCard 
               title="Productos Bajo Stock" 
               value={kpis.low_stock_products} 
-              color="border-2 border-red-500" 
+              variant="danger"
             />
             <MetricCard 
               title="Ventas del Mes" 
               value={formatCurrency(kpis.current_month_sales)} 
+              variant="success"
             />
             <MetricCard 
               title="Órdenes Pendientes" 
               value={kpis.pending_sales_orders} 
-              color="border-2 border-yellow-400" 
+              variant="warning"
             />
           </div>
 
           {/* Charts Section */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Top 5 Productos Más Vendidos */}
-            <div className="bg-white rounded-lg shadow-lg p-6">
-              <h2 className="text-xl font-bold mb-4 text-gray-800">
+            <div className="bg-white rounded-2xl border border-neutral-200 shadow-soft p-6">
+              <h3 className="text-lg font-display font-semibold text-neutral-900 mb-6">
                 Top 5 Productos Más Vendidos
-              </h2>
+              </h3>
               {chartData.top_selling_products.length > 0 ? (
                 <ResponsiveContainer width="100%" height={300}>
                   <PieChart>
@@ -130,17 +137,17 @@ export default function DashboardPage() {
                   </PieChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="h-300 flex items-center justify-center text-gray-500">
+                <div className="h-300 flex items-center justify-center text-neutral-500 text-sm">
                   No hay datos de ventas disponibles
                 </div>
               )}
             </div>
 
             {/* Evolución de Ventas (Últimos 30 días) */}
-            <div className="bg-white rounded-lg shadow-lg p-6">
-              <h2 className="text-xl font-bold mb-4 text-gray-800">
+            <div className="bg-white rounded-2xl border border-neutral-200 shadow-soft p-6">
+              <h3 className="text-lg font-display font-semibold text-neutral-900 mb-6">
                 Ventas en los Últimos 30 Días
-              </h2>
+              </h3>
               {chartData.sales_evolution.length > 0 ? (
                 <ResponsiveContainer width="100%" height={300}>
                   <LineChart data={chartData.sales_evolution}>
@@ -173,7 +180,7 @@ export default function DashboardPage() {
                   </LineChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="h-300 flex items-center justify-center text-gray-500">
+                <div className="h-300 flex items-center justify-center text-neutral-500 text-sm">
                   No hay datos de evolución de ventas
                 </div>
               )}

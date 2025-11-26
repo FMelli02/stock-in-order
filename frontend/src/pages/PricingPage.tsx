@@ -226,32 +226,17 @@ export default function PricingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-16">
-          <h1 className="text-4xl font-extrabold text-gray-900 sm:text-5xl md:text-6xl">
-            Elige el plan perfecto para tu negocio
-          </h1>
-          <p className="mt-4 text-xl text-gray-600 max-w-3xl mx-auto">
-            Gestiona tu inventario, órdenes de venta y compra con Stock In Order. 
-            Sin costos ocultos, cancela cuando quieras.
-          </p>
-          <div className="mt-6 flex justify-center gap-4">
-            <button
-              onClick={() => navigate('/login')}
-              className="px-6 py-2 text-sm font-medium text-indigo-600 bg-white border border-indigo-600 rounded-lg hover:bg-indigo-50 transition"
-            >
-              Iniciar Sesión
-            </button>
-            <button
-              onClick={() => navigate('/register')}
-              className="px-6 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-lg hover:bg-indigo-700 transition"
-            >
-              Crear Cuenta Gratis
-            </button>
-          </div>
-        </div>
+    <div className="max-w-7xl mx-auto">
+      {/* Header */}
+      <div className="text-center mb-16">
+        <h1 className="text-4xl font-display font-extrabold text-neutral-900 sm:text-5xl md:text-6xl">
+          Elige el plan perfecto para tu negocio
+        </h1>
+        <p className="mt-4 text-xl text-neutral-600 max-w-3xl mx-auto">
+          Gestiona tu inventario, órdenes de venta y compra con Stock In Order. 
+          Sin costos ocultos, cancela cuando quieras.
+        </p>
+      </div>
 
         {/* Pricing Cards */}
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
@@ -262,21 +247,21 @@ export default function PricingPage() {
             return (
               <div
                 key={plan.id}
-                className={`relative rounded-2xl shadow-xl overflow-hidden transition-transform hover:scale-105 ${
+                className={`relative rounded-2xl shadow-soft-lg overflow-hidden transition-transform hover:scale-105 ${
                   plan.highlighted
-                    ? 'border-4 border-indigo-600 bg-white'
-                    : 'border border-gray-200 bg-white'
+                    ? 'border-4 border-primary-600 bg-white'
+                    : 'border border-neutral-200 bg-white'
                 }`}
               >
                 {/* Highlighted Badge */}
                 {plan.highlighted && (
-                  <div className="absolute top-0 right-0 bg-indigo-600 text-white px-4 py-1 text-xs font-bold uppercase rounded-bl-lg">
+                  <div className="absolute top-0 right-0 bg-primary-600 text-white px-4 py-1 text-xs font-bold uppercase rounded-bl-lg">
                     Más Popular
                   </div>
                 )}
 
                 {/* Card Header */}
-                <div className={`p-8 ${plan.highlighted ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white' : 'bg-gray-50'}`}>
+                <div className={`p-8 ${plan.highlighted ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white' : 'bg-neutral-50'}`}>
                   <div className="flex items-center gap-3 mb-4">
                     {Icon && <Icon className="w-8 h-8" />}
                     <h3 className="text-2xl font-bold">{plan.name}</h3>
@@ -311,10 +296,10 @@ export default function PricingPage() {
                   <button
                     onClick={() => handleSubscribe(plan.id)}
                     disabled={isLoading}
-                    className={`mt-8 w-full flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-semibold transition ${
+                    className={`mt-8 w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold transition shadow-soft ${
                       plan.highlighted
-                        ? 'bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-indigo-400'
-                        : 'bg-gray-900 text-white hover:bg-gray-800 disabled:bg-gray-400'
+                        ? 'bg-primary-600 text-white hover:bg-primary-700 disabled:bg-primary-400'
+                        : 'bg-neutral-900 text-white hover:bg-neutral-800 disabled:bg-neutral-400'
                     }`}
                   >
                     {isLoading ? (
@@ -355,12 +340,12 @@ export default function PricingPage() {
         </div>
 
         {/* FAQ Section */}
-        <div className="mt-16 bg-white rounded-2xl shadow-lg p-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">Preguntas Frecuentes</h2>
+        <div className="mt-16 bg-white rounded-2xl shadow-soft-lg border border-neutral-200 p-8">
+          <h2 className="text-2xl font-display font-bold text-neutral-900 mb-6">Preguntas Frecuentes</h2>
           <div className="space-y-6">
             <div>
-              <h3 className="font-semibold text-gray-900 mb-2">¿Puedo cambiar de plan en cualquier momento?</h3>
-              <p className="text-gray-600">
+              <h3 className="font-semibold text-neutral-900 mb-2">¿Puedo cambiar de plan en cualquier momento?</h3>
+              <p className="text-neutral-600">
                 Sí, puedes actualizar o degradar tu plan cuando lo necesites. Los cambios se reflejarán en tu próxima facturación.
               </p>
             </div>
@@ -386,19 +371,18 @@ export default function PricingPage() {
         </div>
 
         {/* CTA Section */}
-        <div className="mt-16 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl shadow-2xl p-12 text-center text-white">
-          <h2 className="text-3xl font-bold mb-4">¿Tienes un negocio grande?</h2>
-          <p className="text-xl text-indigo-100 mb-8 max-w-2xl mx-auto">
+        <div className="mt-16 bg-gradient-to-r from-primary-600 to-primary-700 rounded-2xl shadow-soft-xl p-12 text-center text-white">
+          <h2 className="text-3xl font-display font-bold mb-4">¿Tienes un negocio grande?</h2>
+          <p className="text-xl text-primary-100 mb-8 max-w-2xl mx-auto">
             Contacta con nuestro equipo de ventas para obtener una solución personalizada con precios especiales.
           </p>
           <button
             onClick={() => window.open('mailto:sales@stockinorder.com', '_blank')}
-            className="bg-white text-indigo-600 px-8 py-4 rounded-lg font-semibold hover:bg-indigo-50 transition"
+            className="bg-white text-primary-600 px-8 py-4 rounded-xl font-semibold hover:bg-primary-50 transition shadow-soft"
           >
             Contactar Ventas
           </button>
         </div>
-      </div>
     </div>
   )
 }

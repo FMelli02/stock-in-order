@@ -210,7 +210,7 @@ export default function BillingPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
       </div>
     )
   }
@@ -218,9 +218,9 @@ export default function BillingPage() {
   if (!subscription) {
     return (
       <div className="max-w-4xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
-        <div className="bg-white shadow rounded-lg p-8 text-center">
+        <div className="bg-white shadow-soft rounded-2xl border border-neutral-200 p-8 text-center">
           <svg
-            className="mx-auto h-12 w-12 text-gray-400"
+            className="mx-auto h-12 w-12 text-neutral-400"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -232,13 +232,13 @@ export default function BillingPage() {
               d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
             />
           </svg>
-          <h3 className="mt-4 text-lg font-medium text-gray-900">No tienes una suscripción activa</h3>
-          <p className="mt-2 text-sm text-gray-500">
+          <h3 className="mt-4 text-lg font-display font-medium text-neutral-900">No tienes una suscripción activa</h3>
+          <p className="mt-2 text-sm text-neutral-600">
             Suscríbete a un plan para desbloquear todas las funcionalidades premium.
           </p>
           <button
             onClick={() => navigate('/pricing')}
-            className="mt-6 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700"
+            className="mt-6 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-xl shadow-soft text-white bg-primary-600 hover:bg-primary-700"
           >
             Ver Planes
           </button>
@@ -253,8 +253,8 @@ export default function BillingPage() {
   return (
     <div className="max-w-6xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Facturación y Suscripción</h1>
-        <p className="mt-2 text-sm text-gray-600">
+        <h1 className="text-3xl font-display font-bold text-neutral-900">Facturación y Suscripción</h1>
+        <p className="mt-2 text-sm text-neutral-600">
           Administra tu suscripción y métodos de pago
         </p>
       </div>
@@ -262,8 +262,8 @@ export default function BillingPage() {
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
         {/* Current Plan Card */}
         <div className="lg:col-span-2">
-          <div className="bg-white shadow rounded-lg overflow-hidden">
-            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-8 text-white">
+          <div className="bg-white shadow-soft rounded-2xl border border-neutral-200 overflow-hidden">
+            <div className="bg-gradient-to-r from-primary-600 to-primary-700 px-6 py-8 text-white">
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-2xl font-bold capitalize">Plan {subscription.plan_type}</h2>
@@ -361,7 +361,7 @@ export default function BillingPage() {
               <div className="border-t pt-6 flex gap-4">
                 <button
                   onClick={handleUpgrade}
-                  className="flex-1 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition font-medium"
+                  className="flex-1 bg-primary-600 text-white px-4 py-2 rounded-xl hover:bg-primary-700 transition font-medium shadow-soft"
                 >
                   Actualizar Plan
                 </button>
@@ -369,7 +369,7 @@ export default function BillingPage() {
                   <button
                     onClick={handleCancelSubscription}
                     disabled={canceling}
-                    className="flex-1 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition font-medium disabled:bg-red-400"
+                    className="flex-1 bg-red-600 text-white px-4 py-2 rounded-xl hover:bg-red-700 transition font-medium disabled:bg-red-400 shadow-soft"
                   >
                     {canceling ? 'Cancelando...' : 'Cancelar Suscripción'}
                   </button>
@@ -382,9 +382,9 @@ export default function BillingPage() {
         {/* Sidebar */}
         <div className="space-y-6">
           {/* Payment Method */}
-          <div className="bg-white shadow rounded-lg p-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Método de pago</h3>
-            <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg">
+          <div className="bg-white shadow-soft rounded-2xl border border-neutral-200 p-6">
+            <h3 className="text-lg font-display font-medium text-neutral-900 mb-4">Método de pago</h3>
+            <div className="flex items-center gap-3 p-4 bg-neutral-50 rounded-xl">
               <svg className="h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
                   strokeLinecap="round"
@@ -401,14 +401,14 @@ export default function BillingPage() {
           </div>
 
           {/* Help Card */}
-          <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-6">
-            <h3 className="text-lg font-medium text-indigo-900 mb-2">¿Necesitas ayuda?</h3>
-            <p className="text-sm text-indigo-700 mb-4">
+          <div className="bg-primary-50 border border-primary-200 rounded-2xl p-6">
+            <h3 className="text-lg font-display font-medium text-primary-900 mb-2">¿Necesitas ayuda?</h3>
+            <p className="text-sm text-primary-700 mb-4">
               Si tienes alguna pregunta sobre tu suscripción o facturación, contáctanos.
             </p>
             <button
               onClick={() => window.open('mailto:support@stockinorder.com', '_blank')}
-              className="w-full bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition text-sm font-medium"
+              className="w-full bg-primary-600 text-white px-4 py-2 rounded-xl hover:bg-primary-700 transition text-sm font-medium shadow-soft"
             >
               Contactar Soporte
             </button>

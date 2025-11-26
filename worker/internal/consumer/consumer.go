@@ -20,7 +20,8 @@ import (
 type ReportRequest struct {
 	UserID     int64  `json:"user_id"`
 	Email      string `json:"email_to"`
-	ReportType string `json:"report_type"` // "products", "customers", "suppliers"
+	ReportType string `json:"report_type"`        // "products", "customers", "suppliers", "sales_order_pdf"
+	OrderID    int64  `json:"order_id,omitempty"` // Solo para sales_order_pdf
 }
 
 // StockAlertRequest representa la estructura del mensaje de alertas de stock
@@ -243,6 +244,9 @@ func processReport(db *pgxpool.Pool, emailClient *email.Client, req ReportReques
 	var filename string
 
 	// Generar el reporte según el tipo
+	var contentType string
+	contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" // Default para Excel
+
 	switch req.ReportType {
 	case "products":
 		reportBytes, err = reports.GenerateProductsReport(db, req.UserID)
@@ -262,6 +266,13 @@ func processReport(db *pgxpool.Pool, emailClient *email.Client, req ReportReques
 	case "suppliers_weekly":
 		reportBytes, err = reports.GenerateSuppliersReport(db, req.UserID)
 		filename = "reporte_proveedores_semanal.xlsx"
+	case "sales_order_pdf":
+		if req.OrderID == 0 {
+			return fmt.Errorf("order_id is required for sales_order_pdf report type")
+		}
+		reportBytes, err = reports.GenerateSalesOrderPDF(db, req.OrderID, req.UserID)
+		filename = fmt.Sprintf("orden_venta_%d.pdf", req.OrderID)
+		contentType = "application/pdf"
 	default:
 		return fmt.Errorf("unknown report type: %s", req.ReportType)
 	}
@@ -276,7 +287,7 @@ func processReport(db *pgxpool.Pool, emailClient *email.Client, req ReportReques
 	attachment := email.EmailAttachment{
 		Filename:    filename,
 		Content:     reportBytes,
-		ContentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+		ContentType: contentType,
 	}
 
 	if err := emailClient.SendReportEmail(req.Email, "", req.ReportType, attachment); err != nil {

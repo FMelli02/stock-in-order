@@ -26,10 +26,19 @@ type ProductModel struct {
 // GetAllForUser returns all products for a given user.
 func (m *ProductModel) GetAllForUser(userID int64) ([]Product, error) {
 	const q = `
-		SELECT id, name, sku, description, quantity, user_id, created_at
-		FROM products
-		WHERE user_id = $1
-		ORDER BY id`
+		SELECT 
+			p.id, 
+			p.name, 
+			p.sku, 
+			p.description, 
+			COALESCE(SUM(pb.quantity), 0) as quantity,
+			p.user_id, 
+			p.created_at
+		FROM products p
+		LEFT JOIN product_batches pb ON p.id = pb.product_id
+		WHERE p.user_id = $1
+		GROUP BY p.id, p.name, p.sku, p.description, p.user_id, p.created_at
+		ORDER BY p.id`
 
 	rows, err := m.DB.Query(context.Background(), q, userID)
 	if err != nil {

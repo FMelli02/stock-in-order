@@ -314,13 +314,15 @@ func SetupRouter(db *pgxpool.Pool, rabbit *rabbitmq.Client, auditRepo *repositor
 		EncryptionKey: cfg.EncryptionKey,
 	}
 	mlService := services.NewMercadoLibreService(cfg.MLClientID, cfg.MLClientSecret, cfg.MLRedirectURI)
+	shopifyService := services.NewShopifyService()
+	wooCommerceService := services.NewWooCommerceService()
 
 	frontendURL := os.Getenv("FRONTEND_URL")
 	if frontendURL == "" {
-		frontendURL = "http://localhost:5173"
+		frontendURL = "http://localhost:5200"
 	}
 
-	integrationHandlers := handlers.NewIntegrationHandlers(integrationModel, mlService, frontendURL)
+	integrationHandlers := handlers.NewIntegrationHandlers(integrationModel, mlService, shopifyService, wooCommerceService, frontendURL)
 
 	// Listar integraciones del usuario (protegido con paywall)
 	api.Handle("/integrations",
@@ -343,6 +345,18 @@ func SetupRouter(db *pgxpool.Pool, rabbit *rabbitmq.Client, auditRepo *repositor
 	// OAuth2 - Callback de Mercado Libre (público, no requiere JWT)
 	api.HandleFunc("/integrations/mercadolibre/callback",
 		integrationHandlers.HandleMercadoLibreCallback).Methods("GET")
+
+	// Shopify - Conectar tienda (protegido con paywall)
+	api.Handle("/integrations/shopify/connect",
+		withPaywall(
+			http.HandlerFunc(integrationHandlers.HandleShopifyConnect),
+		)).Methods("POST")
+
+	// WooCommerce - Conectar tienda (protegido con paywall)
+	api.Handle("/integrations/woocommerce/connect",
+		withPaywall(
+			http.HandlerFunc(integrationHandlers.HandleWooCommerceConnect),
+		)).Methods("POST")
 
 	// ============================================
 	// SUBSCRIPTIONS - Gestión de suscripciones y pagos
@@ -397,7 +411,7 @@ func SetupRouter(db *pgxpool.Pool, rabbit *rabbitmq.Client, auditRepo *repositor
 
 	// Configure CORS for Vite dev server and common API usage
 	c := cors.New(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:5173"},
+		AllowedOrigins:   []string{"http://localhost:5200"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Content-Type", "Authorization"},
 		AllowCredentials: true,

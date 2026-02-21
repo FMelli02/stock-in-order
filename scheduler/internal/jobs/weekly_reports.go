@@ -7,6 +7,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
@@ -17,15 +18,23 @@ type ReportRequest struct {
 	ReportType string `json:"report_type"`
 }
 
+// User representa un usuario en la base de datos
+type User struct {
+	ID    int64
+	Email string
+}
+
 // WeeklyReportsJob es el job que envía reportes semanales programados
 type WeeklyReportsJob struct {
 	channel *amqp.Channel
+	db      *pgxpool.Pool
 }
 
 // NewWeeklyReportsJob crea una nueva instancia del job
-func NewWeeklyReportsJob(ch *amqp.Channel) *WeeklyReportsJob {
+func NewWeeklyReportsJob(ch *amqp.Channel, db *pgxpool.Pool) *WeeklyReportsJob {
 	return &WeeklyReportsJob{
 		channel: ch,
+		db:      db,
 	}
 }
 
@@ -33,35 +42,70 @@ func NewWeeklyReportsJob(ch *amqp.Channel) *WeeklyReportsJob {
 func (j *WeeklyReportsJob) Execute() {
 	log.Println("⏰ [SCHEDULER] Ejecutando job de reportes semanales...")
 
-	// Lista de reportes a generar semanalmente
-	reports := []ReportRequest{
-		{
-			UserID:     1,
-			Email:      "admin@stockinorder.com",
-			ReportType: "products_weekly",
-		},
-		{
-			UserID:     1,
-			Email:      "admin@stockinorder.com",
-			ReportType: "customers_weekly",
-		},
-		{
-			UserID:     1,
-			Email:      "admin@stockinorder.com",
-			ReportType: "suppliers_weekly",
-		},
+	// Obtener todos los usuarios activos de la base de datos
+	users, err := j.fetchActiveUsers()
+	if err != nil {
+		log.Printf("❌ Error al obtener usuarios: %v", err)
+		return
 	}
 
-	// Enviar cada reporte a la cola
-	for _, req := range reports {
-		if err := j.publishReport(req); err != nil {
-			log.Printf("❌ Error al publicar reporte %s: %v", req.ReportType, err)
-			continue
+	if len(users) == 0 {
+		log.Println("⚠️ No hay usuarios activos para enviar reportes")
+		return
+	}
+
+	log.Printf("📊 Generando reportes semanales para %d usuarios", len(users))
+
+	// Para cada usuario, enviar los 3 tipos de reportes
+	reportTypes := []string{"products_weekly", "customers_weekly", "suppliers_weekly"}
+
+	for _, user := range users {
+		for _, reportType := range reportTypes {
+			req := ReportRequest{
+				UserID:     user.ID,
+				Email:      user.Email,
+				ReportType: reportType,
+			}
+
+			if err := j.publishReport(req); err != nil {
+				log.Printf("❌ Error al publicar reporte %s para usuario %d: %v", reportType, user.ID, err)
+				continue
+			}
+			log.Printf("✅ Reporte semanal enviado a la cola: %s para %s (UserID: %d)", reportType, user.Email, user.ID)
 		}
-		log.Printf("✅ Reporte semanal enviado a la cola: %s para %s", req.ReportType, req.Email)
 	}
 
 	log.Println("🎉 [SCHEDULER] Job de reportes semanales completado")
+}
+
+// fetchActiveUsers obtiene todos los usuarios activos de la base de datos
+func (j *WeeklyReportsJob) fetchActiveUsers() ([]User, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	query := `SELECT id, email FROM users ORDER BY id`
+
+	rows, err := j.db.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("error al consultar usuarios: %w", err)
+	}
+	defer rows.Close()
+
+	var users []User
+	for rows.Next() {
+		var user User
+		if err := rows.Scan(&user.ID, &user.Email); err != nil {
+			log.Printf("⚠️ Error al escanear usuario: %v", err)
+			continue
+		}
+		users = append(users, user)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error al iterar usuarios: %w", err)
+	}
+
+	return users, nil
 }
 
 // publishReport publica un mensaje en la cola de RabbitMQ

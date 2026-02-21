@@ -1,11 +1,14 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/robfig/cron/v3"
 
@@ -18,7 +21,23 @@ func main() {
 
 	// Cargar configuración
 	cfg := config.LoadConfig()
-	log.Printf("📝 Configuración cargada: RabbitMQ_URL=%s", maskConnectionString(cfg.RabbitMQ_URL))
+	log.Printf("📝 Configuración cargada: RabbitMQ_URL=%s, DB_DSN=%s", maskConnectionString(cfg.RabbitMQ_URL), maskConnectionString(cfg.DB_DSN))
+
+	// Conectar a la base de datos
+	dbCtx, dbCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer dbCancel()
+
+	db, err := pgxpool.New(dbCtx, cfg.DB_DSN)
+	if err != nil {
+		log.Fatalf("❌ No se pudo conectar a la base de datos: %v", err)
+	}
+	defer db.Close()
+
+	// Verificar conexión a DB
+	if err := db.Ping(dbCtx); err != nil {
+		log.Fatalf("❌ No se pudo hacer ping a la base de datos: %v", err)
+	}
+	log.Println("✅ Conectado a la base de datos PostgreSQL")
 
 	// Conectar a RabbitMQ
 	conn, err := amqp.Dial(cfg.RabbitMQ_URL)
@@ -69,8 +88,8 @@ func main() {
 	// Crear el scheduler de cron
 	c := cron.New(cron.WithLogger(cron.VerbosePrintfLogger(log.New(os.Stdout, "cron: ", log.LstdFlags))))
 
-	// Crear el job de reportes semanales
-	weeklyJob := jobs.NewWeeklyReportsJob(ch)
+	// Crear el job de reportes semanales (ahora con acceso a la base de datos)
+	weeklyJob := jobs.NewWeeklyReportsJob(ch, db)
 
 	// Crear el job de alertas de stock
 	stockAlertsJob := jobs.NewStockAlertsJob(ch)
@@ -88,16 +107,16 @@ func main() {
 
 	log.Printf("📅 Job de reportes semanales programado con expresión cron: %s", cronExpression)
 
-	// Programar el job de alertas de stock (cada hora)
-	stockAlertsCron := "0 * * * *" // Cada hora en punto
-	// stockAlertsCron := "*/2 * * * *" // TESTING: cada 2 minutos
+	// Programar el job de alertas de stock (diario a las 9:00 AM)
+	stockAlertsCron := "0 9 * * *" // Cada día a las 9:00 AM
+	// stockAlertsCron := "*/5 * * * *" // TESTING: cada 5 minutos para pruebas
 
 	_, err = c.AddFunc(stockAlertsCron, stockAlertsJob.Execute)
 	if err != nil {
 		log.Fatalf("❌ Error al agregar job de stock alerts al scheduler: %v", err)
 	}
 
-	log.Printf("👁️  Job de alertas de stock programado con expresión cron: %s", stockAlertsCron)
+	log.Printf("👁️  Job de alertas de stock programado con expresión cron: %s (diario a las 9:00 AM)", stockAlertsCron)
 	log.Println("🚀 Scheduler iniciado. Esperando próxima ejecución...")
 
 	// Iniciar el scheduler

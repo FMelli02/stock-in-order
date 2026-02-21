@@ -25,12 +25,19 @@ func CheckStockLevels(db *pgxpool.Pool, emailClient *email.Client) error {
 
 	// Consulta SQL para obtener productos con stock bajo que no han sido notificados
 	query := `
-		SELECT p.id, p.name, p.quantity, p.stock_minimo, u.email
+		SELECT 
+			p.id, 
+			p.name, 
+			COALESCE(SUM(pb.quantity), 0) as current_stock,
+			COALESCE(p.stock_minimo, 5) as stock_minimo, 
+			u.email
 		FROM products p
+		LEFT JOIN product_batches pb ON p.id = pb.product_id
 		JOIN users u ON p.user_id = u.id
-		WHERE p.quantity <= p.stock_minimo 
-		  AND p.notificado = false
-		ORDER BY p.quantity ASC
+		WHERE p.notificado = false
+		GROUP BY p.id, p.name, p.stock_minimo, u.email
+		HAVING COALESCE(SUM(pb.quantity), 0) <= COALESCE(p.stock_minimo, 5)
+		ORDER BY current_stock ASC
 	`
 
 	rows, err := db.Query(context.Background(), query)

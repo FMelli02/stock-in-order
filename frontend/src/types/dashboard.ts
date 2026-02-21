@@ -23,7 +23,22 @@ export interface SalesEvolutionPoint {
   total: number
 }
 
+export interface MonthlyRevenue {
+  month: string
+  sales: number
+  purchases: number
+}
+
+export interface LowStockProduct {
+  product_id: number
+  product_name: string
+  current_stock: number
+  min_stock: number
+}
+
 export interface ChartData {
   top_selling_products: TopSellingProduct[]
   sales_evolution: SalesEvolutionPoint[]
+  monthly_revenue: MonthlyRevenue[]
+  low_stock_products: LowStockProduct[]
 }

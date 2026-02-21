@@ -17,6 +17,8 @@ import (
 type IntegrationHandlers struct {
 	IntegrationModel    *models.IntegrationModel
 	MercadoLibreService *services.MercadoLibreService
+	ShopifyService      *services.ShopifyService
+	WooCommerceService  *services.WooCommerceService
 	FrontendURL         string
 }
 
@@ -24,11 +26,15 @@ type IntegrationHandlers struct {
 func NewIntegrationHandlers(
 	integrationModel *models.IntegrationModel,
 	mlService *services.MercadoLibreService,
+	shopifyService *services.ShopifyService,
+	wooCommerceService *services.WooCommerceService,
 	frontendURL string,
 ) *IntegrationHandlers {
 	return &IntegrationHandlers{
 		IntegrationModel:    integrationModel,
 		MercadoLibreService: mlService,
+		ShopifyService:      shopifyService,
+		WooCommerceService:  wooCommerceService,
 		FrontendURL:         frontendURL,
 	}
 }
@@ -227,4 +233,161 @@ func (h *IntegrationHandlers) HandleDeleteIntegration(w http.ResponseWriter, r *
 		"platform", platform)
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// HandleShopifyConnect conecta una tienda Shopify
+// POST /api/v1/integrations/shopify/connect
+func (h *IntegrationHandlers) HandleShopifyConnect(w http.ResponseWriter, r *http.Request) {
+	organizationID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		ShopName string `json:"shop_name"` // example.myshopify.com
+		APIKey   string `json:"api_key"`
+		Password string `json:"password"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Validar campos requeridos
+	if req.ShopName == "" || req.APIKey == "" || req.Password == "" {
+		http.Error(w, "shop_name, api_key, and password are required", http.StatusBadRequest)
+		return
+	}
+
+	// Probar la conexión
+	creds := services.ShopifyCredentials{
+		ShopName: req.ShopName,
+		APIKey:   req.APIKey,
+		Password: req.Password,
+	}
+
+	if err := h.ShopifyService.TestConnection(creds); err != nil {
+		slog.Error("HandleShopifyConnect: failed to connect",
+			"user_id", organizationID,
+			"error", err)
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error": fmt.Sprintf("Failed to connect to Shopify: %v", err),
+		})
+		return
+	}
+
+	// Guardar las credenciales como integración
+	// En este caso, usamos el access_token para guardar las credenciales en JSON
+	credsJSON, _ := json.Marshal(creds)
+
+	integration := &models.Integration{
+		UserID:       organizationID,
+		Platform:     "shopify",
+		AccessToken:  string(credsJSON),                    // Guardamos las credenciales completas
+		RefreshToken: "",                                   // Shopify no usa refresh token con API privada
+		ExpiresAt:    time.Now().Add(365 * 24 * time.Hour), // Las credenciales de API privada no expiran
+	}
+
+	shopName := req.ShopName
+	integration.ExternalUserID = &shopName
+
+	if err := h.IntegrationModel.UpsertByUserAndPlatform(integration); err != nil {
+		slog.Error("HandleShopifyConnect: failed to save integration",
+			"user_id", organizationID,
+			"error", err)
+		http.Error(w, "Failed to save integration", http.StatusInternalServerError)
+		return
+	}
+
+	slog.Info("HandleShopifyConnect: integration saved",
+		"user_id", organizationID,
+		"shop_name", req.ShopName)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Shopify connected successfully",
+	})
+}
+
+// HandleWooCommerceConnect conecta una tienda WooCommerce
+// POST /api/v1/integrations/woocommerce/connect
+func (h *IntegrationHandlers) HandleWooCommerceConnect(w http.ResponseWriter, r *http.Request) {
+	organizationID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		SiteURL        string `json:"site_url"`
+		ConsumerKey    string `json:"consumer_key"`
+		ConsumerSecret string `json:"consumer_secret"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Validar campos requeridos
+	if req.SiteURL == "" || req.ConsumerKey == "" || req.ConsumerSecret == "" {
+		http.Error(w, "site_url, consumer_key, and consumer_secret are required", http.StatusBadRequest)
+		return
+	}
+
+	// Probar la conexión
+	creds := services.WooCommerceCredentials{
+		SiteURL:        req.SiteURL,
+		ConsumerKey:    req.ConsumerKey,
+		ConsumerSecret: req.ConsumerSecret,
+	}
+
+	if err := h.WooCommerceService.TestConnection(creds); err != nil {
+		slog.Error("HandleWooCommerceConnect: failed to connect",
+			"user_id", organizationID,
+			"error", err)
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error": fmt.Sprintf("Failed to connect to WooCommerce: %v", err),
+		})
+		return
+	}
+
+	// Guardar las credenciales como integración
+	credsJSON, _ := json.Marshal(creds)
+
+	integration := &models.Integration{
+		UserID:       organizationID,
+		Platform:     "woocommerce",
+		AccessToken:  string(credsJSON),
+		RefreshToken: "",
+		ExpiresAt:    time.Now().Add(365 * 24 * time.Hour), // Las credenciales de API no expiran
+	}
+
+	siteURL := req.SiteURL
+	integration.ExternalUserID = &siteURL
+
+	if err := h.IntegrationModel.UpsertByUserAndPlatform(integration); err != nil {
+		slog.Error("HandleWooCommerceConnect: failed to save integration",
+			"user_id", organizationID,
+			"error", err)
+		http.Error(w, "Failed to save integration", http.StatusInternalServerError)
+		return
+	}
+
+	slog.Info("HandleWooCommerceConnect: integration saved",
+		"user_id", organizationID,
+		"site_url", req.SiteURL)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "WooCommerce connected successfully",
+	})
 }

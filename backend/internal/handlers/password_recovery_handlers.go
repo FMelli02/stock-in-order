@@ -87,7 +87,7 @@ func ForgotPassword(db *pgxpool.Pool, emailService *services.EmailService) http.
 
 		// Get frontend URL from environment or use default
 		// TODO: Make this configurable via environment variable
-		frontendURL := "http://localhost:5173" // Default for development
+		frontendURL := "http://localhost:5200" // Default for development
 		resetLink := frontendURL + "/reset-password?token=" + plainToken
 
 		// Send email with reset link

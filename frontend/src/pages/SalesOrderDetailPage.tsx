@@ -9,6 +9,16 @@ type SalesOrderDetailResponse = {
   items: OrderItem[]
 }
 
+type PaginatedProductsResponse = {
+  items: Product[]
+  metadata: {
+    page: number
+    page_size: number
+    total_records: number
+    total_pages: number
+  }
+}
+
 export default function SalesOrderDetailPage() {
   const { id } = useParams()
   const orderId = Number(id)
@@ -31,12 +41,12 @@ export default function SalesOrderDetailPage() {
         setError(null)
         const [orderRes, productsRes] = await Promise.all([
           api.get<SalesOrderDetailResponse>(`/sales-orders/${orderId}`),
-          api.get<Product[]>('/products'),
+          api.get<PaginatedProductsResponse>('/products'),
         ])
         if (!mounted) return
         setOrder(orderRes.data.order)
         setItems(orderRes.data.items)
-        setProducts(productsRes.data)
+        setProducts(productsRes.data.items || [])
       } catch (e) {
         console.error(e)
         if (mounted) setError('No se pudo cargar la orden de venta')

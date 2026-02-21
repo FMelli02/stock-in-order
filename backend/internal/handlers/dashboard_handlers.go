@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -46,7 +47,8 @@ func GetDashboardKPIs(db *pgxpool.Pool) http.HandlerFunc {
 		dm := &models.DashboardModel{DB: db}
 		kpis, err := dm.GetDashboardKPIs(organizationID)
 		if err != nil {
-			http.Error(w, "could not fetch KPIs", http.StatusInternalServerError)
+			slog.Error("Error fetching dashboard KPIs", "error", err, "organizationID", organizationID)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
@@ -67,7 +69,8 @@ func GetDashboardCharts(db *pgxpool.Pool) http.HandlerFunc {
 		dm := &models.DashboardModel{DB: db}
 		chartData, err := dm.GetChartData(organizationID)
 		if err != nil {
-			http.Error(w, "could not fetch chart data", http.StatusInternalServerError)
+			slog.Error("Error fetching dashboard charts", "error", err, "organizationID", organizationID)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 

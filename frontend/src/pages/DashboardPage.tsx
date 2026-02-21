@@ -10,6 +10,8 @@ import {
   Tooltip,
   LineChart,
   Line,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -107,8 +109,8 @@ export default function DashboardPage() {
             />
           </div>
 
-          {/* Charts Section */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Charts Section - Primera fila */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
             {/* Top 5 Productos Más Vendidos */}
             <div className="bg-white rounded-2xl border border-neutral-200 shadow-soft p-6">
               <h3 className="text-lg font-display font-semibold text-neutral-900 mb-6">
@@ -182,6 +184,87 @@ export default function DashboardPage() {
               ) : (
                 <div className="h-300 flex items-center justify-center text-neutral-500 text-sm">
                   No hay datos de evolución de ventas
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Segunda fila - Ingresos mensuales y Stock Bajo */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Ingresos Mensuales - Ventas vs Compras */}
+            <div className="lg:col-span-2 bg-white rounded-2xl border border-neutral-200 shadow-soft p-6">
+              <h3 className="text-lg font-display font-semibold text-neutral-900 mb-6">
+                Ingresos Mensuales - Últimos 6 Meses
+              </h3>
+              {chartData.monthly_revenue.length > 0 ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={chartData.monthly_revenue}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis 
+                      dataKey="month" 
+                      tick={{ fontSize: 12 }}
+                    />
+                    <YAxis 
+                      tickFormatter={(value) => `$${value}`}
+                      tick={{ fontSize: 12 }}
+                    />
+                    <Tooltip 
+                      formatter={(value: number) => formatCurrency(value)}
+                    />
+                    <Legend />
+                    <Bar 
+                      dataKey="sales" 
+                      fill="#10b981" 
+                      name="Ventas"
+                      radius={[8, 8, 0, 0]}
+                    />
+                    <Bar 
+                      dataKey="purchases" 
+                      fill="#ef4444" 
+                      name="Compras"
+                      radius={[8, 8, 0, 0]}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-300 flex items-center justify-center text-neutral-500 text-sm">
+                  No hay datos de ingresos mensuales
+                </div>
+              )}
+            </div>
+
+            {/* Productos con Stock Bajo */}
+            <div className="bg-white rounded-2xl border border-neutral-200 shadow-soft p-6">
+              <h3 className="text-lg font-display font-semibold text-neutral-900 mb-4">
+                ⚠️ Stock Crítico
+              </h3>
+              {chartData.low_stock_products.length > 0 ? (
+                <div className="space-y-3 max-h-[300px] overflow-y-auto">
+                  {chartData.low_stock_products.map((product) => (
+                    <div 
+                      key={product.product_id}
+                      className="p-3 bg-red-50 border border-red-200 rounded-xl"
+                    >
+                      <div className="font-medium text-sm text-neutral-900 mb-1">
+                        {product.product_name}
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-neutral-600">
+                          Stock: <span className="font-semibold text-red-600">{product.current_stock}</span>
+                        </span>
+                        <span className="text-neutral-500">
+                          Mín: {product.min_stock}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex items-center justify-center h-[200px] text-neutral-500 text-sm">
+                  <div className="text-center">
+                    <div className="text-4xl mb-2">✅</div>
+                    <p>No hay productos con stock bajo</p>
+                  </div>
                 </div>
               )}
             </div>

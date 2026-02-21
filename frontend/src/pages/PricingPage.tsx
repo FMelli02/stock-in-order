@@ -67,7 +67,7 @@ interface Plan {
 
 const plans: Plan[] = [
   {
-    id: 'basico',
+    id: 'plan_basico',
     name: 'Básico',
     price: 5000,
     currency: 'ARS',
@@ -90,7 +90,7 @@ const plans: Plan[] = [
     },
   },
   {
-    id: 'pro',
+    id: 'plan_pro',
     name: 'Pro',
     price: 15000,
     currency: 'ARS',
@@ -114,7 +114,7 @@ const plans: Plan[] = [
     },
   },
   {
-    id: 'enterprise',
+    id: 'plan_enterprise',
     name: 'Enterprise',
     price: 40000,
     currency: 'ARS',
@@ -171,8 +171,7 @@ export default function PricingPage() {
 
       // Crear checkout de MercadoPago
       const response = await api.post('/subscriptions/create-checkout', {
-        plan_type: planId,
-        billing_cycle: 'monthly',
+        plan_id: planId,
       })
 
       if (response.data.checkout_url) {

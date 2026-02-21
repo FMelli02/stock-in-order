@@ -58,12 +58,17 @@ services:
       ENVIRONMENT: "${ENVIRONMENT:-development}"
       SENTRY_DSN: "${SENTRY_DSN_BACKEND:-}"  # Optional: set via .env file
       RABBITMQ_URL: "amqp://user:pass@rabbitmq:5672/"
-      FRONTEND_URL: "${FRONTEND_URL:-http://localhost:5173}"
+      FRONTEND_URL: "${FRONTEND_URL:-http://localhost:5200}"
+      APP_URL: "${APP_URL:-http://localhost:5200}"
       LOG_LEVEL: "${LOG_LEVEL:-info}"  # Nivel de log (debug, info, warn, error)
       # Mercado Libre OAuth2 (configurar con tus credenciales reales)
       ML_CLIENT_ID: "${ML_CLIENT_ID:-your_mercadolibre_app_id}"
       ML_CLIENT_SECRET: "${ML_CLIENT_SECRET:-your_mercadolibre_app_secret}"
       ML_REDIRECT_URI: "${ML_REDIRECT_URI:-http://localhost:8080/api/v1/integrations/mercadolibre/callback}"
+      # MercadoPago
+      MP_ACCESS_TOKEN: "${MP_ACCESS_TOKEN:-}"
+      # SendGrid
+      SENDGRID_API_KEY: "${SENDGRID_API_KEY:-}"
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -113,7 +118,10 @@ services:
       context: ./scheduler
     environment:
       RABBITMQ_URL: "amqp://user:pass@rabbitmq:5672/"
+      DB_DSN: "${SUPABASE_DB_URL:-postgres://user:pass@postgres_db:5432/stock_db?sslmode=disable}"
     depends_on:
+      postgres_db:
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
     restart: unless-stopped
@@ -126,7 +134,7 @@ services:
         VITE_API_URL: "http://localhost:8080/api/v1"
         VITE_SENTRY_DSN: "${SENTRY_DSN_FRONTEND:-}"  # Optional: set via .env file
     ports:
-      - "5173:80"
+      - "5200:80"
     depends_on:
       postgres_db:
         condition: service_healthy
